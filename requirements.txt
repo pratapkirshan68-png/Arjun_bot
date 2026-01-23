@@ -1,7 +1,3 @@
-pyrogram
-aiohttp
 motor
-pymongo
-pyaes
-fastapi
-uvicorn
+dnspython
+pyTelegramBotAPI
