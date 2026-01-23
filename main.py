@@ -10,9 +10,6 @@ from pyrogram.errors import UserNotParticipant
 from bson.objectid import ObjectId
 from aiohttp import web
 
-# ================= LOGGING =================
-logging.basicConfig(level=logging.INFO)
-
 # ================= CONFIG =================
 API_ID = int(os.environ["API_ID"])
 API_HASH = os.environ["API_HASH"]
@@ -24,11 +21,8 @@ SEARCH_CHAT = int(os.environ["SEARCH_CHAT"])
 FSUB_CHANNEL = int(os.environ["FSUB_CHANNEL"])
 
 MAIN_CHANNEL_LINK = os.environ["MAIN_CHANNEL_LINK"]
-SEARCH_GROUP_LINK = os.environ.get("SEARCH_GROUP_LINK", MAIN_CHANNEL_LINK)
-
 SHORT_DOMAIN = os.environ.get("SHORT_DOMAIN")
 SHORT_API_KEY = os.environ.get("SHORT_API_KEY")
-
 ADMIN_IDS = [int(x) for x in re.findall(r'-?\d+', os.environ.get("ADMIN_IDS", ""))]
 
 SHORTLINK_ENABLED = True
@@ -44,9 +38,9 @@ mongo = AsyncIOMotorClient(MONGO_URL)
 db = mongo["PratapCinemaBot"]
 movies = db["movies"]
 
-# ================= WEB (Render Fix) =================
+# ================= WEB SERVER (For Render) =================
 async def health(_):
-    return web.Response(text="Bot is alive")
+    return web.Response(text="Bot is running!")
 
 async def start_web():
     app = web.Application()
@@ -56,16 +50,16 @@ async def start_web():
     port = int(os.environ.get("PORT", 8080))
     await web.TCPSite(runner, "0.0.0.0", port).start()
 
-# ================= BOT =================
+# ================= BOT CLIENT =================
 bot = Client("pratap_session", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # ================= HELPERS =================
-def clean_name(text):
-    text = text.lower()
-    junk = ['1080p','720p','480p','x264','x265','hevc','hindi','english']
-    for j in junk:
-        text = text.replace(j, '')
-    return " ".join(text.replace('.', ' ').replace('_',' ').split())
+async def auto_delete(msg, t):
+    await asyncio.sleep(t)
+    try:
+        await msg.delete()
+    except:
+        pass
 
 async def get_shortlink(url):
     if not SHORTLINK_ENABLED or not SHORT_DOMAIN:
@@ -76,6 +70,105 @@ async def get_shortlink(url):
             async with s.get(api, timeout=10) as r:
                 j = await r.json()
                 return j.get("shortenedUrl", url)
+    except:
+        return url
+
+# ================= SEARCH (1 MIN DELETE) =================
+# Yahan 'filters.command()' mein brackets lagaye hain taaki error na aaye
+@bot.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command())
+async def search_logic(_, msg):
+    query = msg.text.strip().lower()
+    if len(query) < 3: return
+
+    # User ka message aur bot ka reply 1 min me delete
+    asyncio.create_task(auto_delete(msg, 60))
+
+    res = await movies.find_one({"title": {"$regex": query, "$options": "i"}})
+    if not res:
+        err = await msg.reply("❌ Movie nahi mili bhai!")
+        asyncio.create_task(auto_delete(err, 60))
+        return
+
+    me = await bot.get_me()
+    link = await get_shortlink(f"https://t.me/{me.username}?start=file_{res['_id']}")
+
+    btn = InlineKeyboardMarkup([[InlineKeyboardButton("🎬 GET MOVIE", url=link)]])
+    sent = await msg.reply(
+        f"🎥 **Movie Mil Gayi!**\n\n👤 User: {msg.from_user.mention}\n\n👇 Download link niche hai",
+        reply_markup=btn
+    )
+    asyncio.create_task(auto_delete(sent, 60))
+
+# ================= START & FILE (2 MIN DELETE) =================
+@bot.on_message(filters.private & filters.command("start"))
+async def start_logic(_, msg):
+    user_id = msg.from_user.id
+    
+    # 1. Join Check
+    try:
+        await bot.get_chat_member(FSUB_CHANNEL, user_id)
+    except UserNotParticipant:
+        arg = msg.command[1] if len(msg.command) > 1 else ""
+        return await msg.reply(
+            "❌ **Pehle join karo!**",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📢 JOIN CHANNEL", url=MAIN_CHANNEL_LINK)],
+                [InlineKeyboardButton("🔄 TRY AGAIN", url=f"https://t.me/{bot.me.username}?start={arg}")]
+            ])
+        )
+
+    # 2. File Dena
+    if len(msg.command) > 1 and msg.command[1].startswith("file_"):
+        f_id = msg.command[1].replace("file_", "")
+        res = await movies.find_one({"_id": ObjectId(f_id)})
+        
+        if res:
+            f_msg = await bot.send_cached_media(msg.chat.id, res["file_id"], caption=WATERMARK_TEXT)
+            asyncio.create_task(auto_delete(f_msg, 120)) # File delete in 2 min
+            
+            warning = await msg.reply("☝️ **Ye file 2 minute me delete ho jayegi!**")
+            asyncio.create_task(auto_delete(warning, 120))
+        else:
+            await msg.reply("❌ File nahi mili.")
+    else:
+        await msg.reply("Bhai, group me movie search karo!")
+
+# ================= ADMIN COMMANDS =================
+@bot.on_message(filters.command("pratap") & filters.user(ADMIN_IDS))
+async def stats_cmd(_, msg):
+    c = await movies.count_documents({})
+    await msg.reply(f"📊 Total Movies: {c}")
+
+@bot.on_message(filters.command("shortn") & filters.user(ADMIN_IDS))
+async def short_cmd(_, msg):
+    global SHORTLINK_ENABLED
+    state = msg.command[1].lower() if len(msg.command) > 1 else ""
+    if state == "on": SHORTLINK_ENABLED = True
+    elif state == "off": SHORTLINK_ENABLED = False
+    await msg.reply(f"✅ Shortener: {SHORTLINK_ENABLED}")
+
+@bot.on_message(filters.command("del") & filters.user(ADMIN_IDS))
+async def del_cmd(_, msg):
+    q = " ".join(msg.command[1:])
+    r = await movies.delete_many({"title": {"$regex": q, "$options": "i"}})
+    await msg.reply(f"🗑 Deleted: {r.deleted_count}")
+
+# ================= STORAGE =================
+@bot.on_message(filters.chat(STORAGE_CHANNEL) & (filters.video | filters.document))
+async def storage_logic(_, msg):
+    file = msg.video or msg.document
+    title = (msg.caption or file.file_name or "unknown").lower()
+    await movies.insert_one({"title": title, "file_id": file.file_id})
+    await msg.reply(f"✅ Added: {title}")
+
+# ================= RUN =================
+async def run_bot():
+    await start_web()
+    await bot.start()
+    await idle()
+
+if __name__ == "__main__":
+    asyncio.run(run_bot())                return j.get("shortenedUrl", url)
     except:
         return url
 
