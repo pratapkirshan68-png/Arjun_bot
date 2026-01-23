@@ -1,8 +1,10 @@
 pyrogram
 tgcrypto
-aiohttp
 motor
-pymongo
+dnspython
+aiohttp
 fastapi
 uvicorn
-pyaes
+jinja2
+python-dotenv
+pymongo
