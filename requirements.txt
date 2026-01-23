@@ -1,7 +1,4 @@
 pyrogram
 aiohttp
-motor
-pymongo
+aiosqlite
 pyaes
-fastapi
-uvicorn
