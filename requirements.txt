@@ -1,0 +1,7 @@
+pyrogram
+aiohttp
+motor
+pymongo
+pyaes
+fastapi
+uvicorn
