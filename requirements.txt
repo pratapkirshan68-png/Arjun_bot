@@ -4,3 +4,5 @@ motor
 aiohttp
 dnspython
 pymongo
+aiofiles
+uvloop
