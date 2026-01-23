@@ -1,3 +1,5 @@
+import os
+os.system("pip install motor dnspython pyrogram tgcrypto")
 import re
 import asyncio
 import aiohttp
