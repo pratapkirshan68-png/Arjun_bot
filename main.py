@@ -142,7 +142,7 @@ async def search(_, m):
         await m.reply(cap, reply_markup=btn)
 
 # ================== WRONG PLACE SEARCH ==================
-@bot.on_message(filters.private & filters.text & ~filters.command)
+@bot.on_message(filters.private & filters.text & ~filters.command([]))
 async def wrong(_, m):
     await m.reply(
         "❌ Yahan search nahi hota bhai 🙏\n"
@@ -201,7 +201,7 @@ async def delete(_, m):
     await m.reply(f"🗑 Deleted: {r.deleted_count}")
 
 # ================= PRIVATE TEXT (NO COMMAND) =================
-@bot.on_message(filters.private & filters.text & ~filters.command)
+@bot.on_message(filters.private & filters.text & ~filters.command([]))
 async def private_text(_, m):
     await m.reply(
         "❌ Yahan movie search nahi hota bhai 🙏\n\n"
