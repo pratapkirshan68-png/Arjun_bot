@@ -1,53 +1,52 @@
-import os
+
+
+
 import re
 import asyncio
 import aiohttp
-from motor.motor_asyncio import AsyncIOMotorClient
-from pyrogram import Client, filters, idle
+import aiosqlite
+from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
-from bson.objectid import ObjectId
-from aiohttp import web
 
-# ================== CONFIG ==================
-API_ID = int(os.environ["API_ID"])
-API_HASH = os.environ["API_HASH"]
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-MONGO_URL = os.environ["MONGO_URL"]
+# ================= CONFIGURATION =================
+API_ID = 24926770             
+API_HASH = "f8de17dede0af9915d3bf8e05a5c66c2"    
+BOT_TOKEN = "8418937721:AAEalOP7pfsjf3MCE9wgLJx2Rms1csb28S8"  
+TMDB_API_KEY = "352bb22d327ce87e69217a7ae4cbe598" 
 
-STORAGE_CHANNEL = int(os.environ["STORAGE_CHANNEL"])
-SEARCH_CHAT = int(os.environ["SEARCH_CHAT"])
-FSUB_CHANNEL = int(os.environ["FSUB_CHANNEL"])
+SHORT_DOMAIN = "arolinks.com"
+SHORT_API_KEY = "badc700f4f81f6524c5bc08bc4c7c6cd286a9298"
 
-MAIN_CHANNEL_LINK = os.environ["MAIN_CHANNEL_LINK"]
-SEARCH_GROUP_LINK = os.environ.get("SEARCH_GROUP_LINK", MAIN_CHANNEL_LINK)
+STORAGE_CHANNEL = -1003536285620  
+SEARCH_CHAT = -1003556253573      
+FSUB_CHANNEL = -1003652459294   
+MAIN_CHANNEL_LINK = "https://t.me/Movies2026Cinema" 
 
-SHORT_DOMAIN = os.environ.get("SHORT_DOMAIN", "")
-SHORT_API_KEY = os.environ.get("SHORT_API_KEY", "")
-TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
+ADMIN_IDS = [6429831771]
+DB_NAME = "pratap_cinema_pro.db" 
 
-raw_admins = os.environ.get("ADMIN_IDS", "")
-ADMIN_IDS = [int(x) for x in re.findall(r"-?\d+", raw_admins)]
+# Isse global rakha hai taaki commands se badal sakein
+SHORTLINK_ENABLED = True 
 
-SHORTLINK_ENABLED = True
+class MovieBot(Client):
+    def __init__(self):
+        super().__init__("pratap_session", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+        self.db = None
 
-WATERMARK = (
-    "🎬 Movies 2026 - Cinema Pratap ❤️🌹\n"
-    "⚠️ Ye file 2 minute me auto delete ho jayegi"
-)
+    async def start(self):
+        await super().start()
+        self.db = await aiosqlite.connect(DB_NAME)
+        await self.db.execute("CREATE TABLE IF NOT EXISTS movies(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, file_id TEXT)")
+        await self.db.commit()
+        self.bot_info = await self.get_me()
+        print(f"🚀 BOT @{self.bot_info.username} STARTED")
 
-# ================== DB ==================
-mongo = AsyncIOMotorClient(MONGO_URL)
-db = mongo["PratapCinemaBot"]
-movies = db["movies"]
+    async def stop(self, *args):
+        await self.db.close()
+        await super().stop()
 
-# ================== BOT ==================
-bot = Client(
-    "pratap_session",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN
-)
+app = MovieBot()
 
 # ================== WEB (Render) ==================
 async def health(_):
@@ -61,21 +60,186 @@ async def start_web():
     port = int(os.environ.get("PORT", 8080))
     await web.TCPSite(runner, "0.0.0.0", port).start()
 
-# ================== HELPERS ==================
-def clean_name(text):
-    text = text.lower()
-    junk = ["1080p","720p","480p","x264","x265","hevc","hindi","english"]
-    for j in junk:
-        text = text.replace(j, "")
-    return " ".join(text.replace(".", " ").replace("_"," ").split())
+# ================== DB ==================
+mongo = AsyncIOMotorClient(MONGO_URL)
+db = mongo["PratapCinemaBot"]
+movies = db["movies"]
 
-async def auto_delete(msg, t=120):
-    await asyncio.sleep(t)
+# ================= HELPERS =================
+
+async def get_shortlink(url):
+    global SHORTLINK_ENABLED
+    if not SHORTLINK_ENABLED: 
+        return url
     try:
-        await msg.delete()
-    except:
-        pass
+        api_url = f"https://{SHORT_DOMAIN}/api?api={SHORT_API_KEY}&url={url}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=10) as resp:
+                res = await resp.json()
+                if res.get("status") == "success": 
+                    return res["shortenedUrl"]
+    except: pass
+    return url
 
+def clean_name(text):
+    if not text: return ""
+    text = text.lower()
+    junk = [r'\(.*?\)', r'\[.*?\]', '1080p', '720p', '480p', 'x264', 'x265', 'hevc', 'hindi', 'english']
+    for word in junk: text = re.sub(word, '', text)
+    return " ".join(text.replace(".", " ").replace("_", " ").split()).strip()
+
+async def get_tmdb_info(query):
+    search_q = re.sub(r'\d{4}', '', query).strip()
+    url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={search_q}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get('results'):
+                        res = data['results'][0]
+                        p_path = res.get('backdrop_path') or res.get('poster_path')
+                        poster = f"https://image.tmdb.org/t/p/w780{p_path}" if p_path else None
+                        title = res.get('title') or res.get('name') or query.upper()
+                        rating = res.get('vote_average', 'N/A')
+                        year = (res.get('release_date') or res.get('first_air_date') or "0000")[:4]
+                        return poster, title, rating, year
+    except: pass
+    return None, query.upper(), "N/A", "0000"
+
+async def delete_after_delay(msgs, delay):
+    await asyncio.sleep(delay)
+    for m in msgs:
+        try: await m.delete()
+        except: pass
+
+# ================= ADMIN COMMANDS =================
+
+@app.on_message(filters.command("pratap") & filters.user(ADMIN_IDS))
+async def stats_cmd(client, msg):
+    cursor = await client.db.execute("SELECT COUNT(*) FROM movies")
+    count = (await cursor.fetchone())[0]
+    await msg.reply(f"📊 **Total Movies in DB:** `{count}`")
+
+@app.on_message(filters.command("shortlink") & filters.user(ADMIN_IDS))
+async def toggle_shortlink_cmd(client, msg):
+    global SHORTLINK_ENABLED
+    if len(msg.command) < 2:
+        return await msg.reply("Usage: `/shortlink on` or `/shortlink off`")
+    
+    choice = msg.command[1].lower()
+    if choice == "on":
+        SHORTLINK_ENABLED = True
+        await msg.reply("✅ Shortlink has been **ENABLED**.")
+    elif choice == "off":
+        SHORTLINK_ENABLED = False
+        await msg.reply("❌ Shortlink has been **DISABLED**.")
+
+@app.on_message(filters.command("del") & filters.user(ADMIN_IDS))
+async def delete_movie_cmd(client, msg):
+    if len(msg.command) < 2:
+        return await msg.reply("Usage: `/del movie_name`")
+    query = " ".join(msg.command[1:])
+    await client.db.execute("DELETE FROM movies WHERE title LIKE ?", (f"%{query}%",))
+    await client.db.commit()
+    await msg.reply(f"🗑️ `{query}` removed from Database.")
+
+# ================= STORAGE INDEXING =================
+
+@app.on_message(filters.chat(STORAGE_CHANNEL) & (filters.video | filters.document))
+async def add_to_db(client, msg):
+    file = msg.video or msg.document
+    title = clean_name(msg.caption or file.file_name or "Unknown")
+    await client.db.execute("INSERT INTO movies (title, file_id) VALUES (?, ?)", (title, file.file_id))
+    await client.db.commit()
+    # Confirmation message in storage channel
+    await msg.reply_text(f"✅ **Movie Added:** `{title}`")
+
+# ================= SEARCH LOGIC =================
+
+@app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "shortlink", "del"]))
+async def search_movie(client, msg):
+    query = clean_name(msg.text)
+    if len(query) < 3: return
+
+    try: await msg.delete()
+    except: pass
+
+    u_name = msg.from_user.first_name if msg.from_user else "User"
+    u_id = msg.from_user.id if msg.from_user else "N/A"
+
+    sm = await client.send_message(msg.chat.id, f"🔍 **Searching:** `{msg.text}`...")
+
+    cursor = await client.db.execute("SELECT id, title FROM movies WHERE title LIKE ? LIMIT 1", (f"%{query}%",))
+    res = await cursor.fetchone()
+
+    if not res:
+        await sm.edit(f"❌ `{msg.text}` nahi mili! Spelling check karein.")
+        asyncio.create_task(delete_after_delay([sm], 15))
+        return 
+
+    db_id, db_title = res
+    poster, m_title, m_rating, m_year = await get_tmdb_info(query)
+
+    bot_url = f"https://t.me/{client.bot_info.username}?start=file_{db_id}"
+    final_link = await get_shortlink(bot_url)
+
+    btn = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 DOWNLOAD / WATCH NOW", url=final_link)],
+                                [InlineKeyboardButton("✨ JOIN CHANNEL ✨", url=MAIN_CHANNEL_LINK)]])
+
+    # Watermark bilkul screenshot jaisa footer format
+    cap = (f"✅ **Movie Mil Gayi!**\n\n🎬 **Naam:** `{db_title}`\n"
+           f"🌟 **Rating:** `{m_rating}` | 📅 **Year:** `{m_year}`\n\n"
+           f"👤 **User:** {u_name}\n🆔 **ID:** `{u_id}`\n\n"
+           f"👁️ 2  [Movies 2026 - Cinema Pratap\"❤️🌹]({MAIN_CHANNEL_LINK})")
+
+    if poster:
+        res_msg = await client.send_photo(msg.chat.id, poster, caption=cap, reply_markup=btn)
+    else:
+        res_msg = await client.send_message(msg.chat.id, cap, reply_markup=btn)
+    
+    await sm.delete()
+    asyncio.create_task(delete_after_delay([res_msg], 120))
+
+# ================= START / FSUB =================
+
+@app.on_message(filters.command("start") & filters.private)
+async def start_handler(client, msg):
+    user_id = msg.from_user.id
+    
+    # PEHLE JOIN CHECK
+    try:
+        await client.get_chat_member(FSUB_CHANNEL, user_id)
+    except UserNotParticipant:
+        invite = (await client.get_chat(FSUB_CHANNEL)).invite_link
+        btn = InlineKeyboardMarkup([[InlineKeyboardButton("📢 JOIN CHANNEL FIRST 📢", url=invite)],
+                                    [InlineKeyboardButton("✅ TRY AGAIN", url=f"https://t.me/{client.bot_info.username}?start={msg.command[1] if len(msg.command)>1 else ''}")]])
+        return await msg.reply("❌ **Access Denied!**\n\nFile paane ke liye pehle niche diye gaye channel ko join karein.", reply_markup=btn)
+    except Exception as e:
+        print(f"Join Check Error: {e}")
+
+    # AGAR JOIN HAI
+    if len(msg.command) < 2:
+        return await msg.reply("👋 Namaste! Group me movie search karein.")
+
+    data = msg.command[1]
+    if data.startswith("file_"):
+        m_id = data.split("_")[1]
+        cursor = await client.db.execute("SELECT file_id, title FROM movies WHERE id = ?", (m_id,))
+        res = await cursor.fetchone()
+        
+        if res:
+            f_id, title = res
+            caption = (f"📂 **File Name:** `{title}`\n👤 **Admin:** pratap 🇮🇳❤️\n\n"
+                       f"🚀 **Channel:** {MAIN_CHANNEL_LINK}\n\n"
+                       f"👁️ 2  [Movies 2026 - Cinema Pratap\"❤️🌹]({MAIN_CHANNEL_LINK})\n\n"
+                       f"⚠️ **Warning:** 2 minute me delete ho jayegi!")
+            
+            sf = await client.send_cached_media(msg.chat.id, f_id, caption=caption)
+            asyncio.create_task(delete_after_delay([sf], 120))
+
+if __name__ == "__main__":
+    app.run()
 async def shortlink(url):
     if not SHORTLINK_ENABLED or not SHORT_DOMAIN:
         return url
