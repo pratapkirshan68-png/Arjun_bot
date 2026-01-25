@@ -180,25 +180,40 @@ async def start(_, m):
     else:
         await m.reply("✅ Bot ready, group me movie search karo")
 
-# ================== ADMIN ==================
+# ================= ADMIN COMMANDS =================
+
+# 1. Check Movie Count
 @bot.on_message(filters.command("pratap") & filters.user(ADMIN_IDS))
-async def stats(_, m):
+async def stats(_, msg):
     c = await movies.count_documents({})
-    await m.reply(f"📊 Total Movies: {c}")
+    await msg.reply(f"📊 **Total Movies:** {c}")
 
-@bot.on_message(filters.command("shortnr") & filters.user(ADMIN_IDS))
-async def short_toggle(_, m):
+# 2. Shortener On/Off
+@bot.on_message(filters.command("shortn") & filters.user(ADMIN_IDS))
+async def short_toggle(_, msg):
     global SHORTLINK_ENABLED
-    if len(m.command) < 2:
-        return await m.reply("/shortnr on | off")
-    SHORTLINK_ENABLED = m.command[1] == "on"
-    await m.reply("✅ Done")
+    if len(msg.command) < 2:
+        return await msg.reply("Use: `/shortn on` ya `/shortn off`")
+    
+    state = msg.command[1].lower()
+    if state == "on":
+        SHORTLINK_ENABLED = True
+        await msg.reply("✅ Shortener **ON** kar diya.")
+    elif state == "off":
+        SHORTLINK_ENABLED = False
+        await msg.reply("❌ Shortener **OFF** kar diya.")
+    else:
+        await msg.reply("❌ Sahi command likho: on ya off")
 
+# 3. Delete Movie
 @bot.on_message(filters.command("del") & filters.user(ADMIN_IDS))
-async def delete(_, m):
-    q = " ".join(m.command[1:])
+async def delete(_, msg):
+    if len(msg.command) < 2:
+        return await msg.reply("❌ Movie ka naam bhi likho delete karne ke liye.\nExample: `/del Pathaan`")
+        
+    q = " ".join(msg.command[1:])
     r = await movies.delete_many({"title": {"$regex": q, "$options": "i"}})
-    await m.reply(f"🗑 Deleted: {r.deleted_count}")
+    await msg.reply(f"🗑 **Deleted:** {r.deleted_count} files jinke naam me '{q}' tha.")
 
 # ================= PRIVATE TEXT (NO COMMAND) =================
 @bot.on_message(filters.private & filters.text & ~filters.command([]))
