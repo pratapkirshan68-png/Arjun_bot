@@ -200,6 +200,17 @@ async def delete(_, m):
     r = await movies.delete_many({"title": {"$regex": q, "$options": "i"}})
     await m.reply(f"🗑 Deleted: {r.deleted_count}")
 
+# ================= PRIVATE TEXT (NO COMMAND) =================
+@bot.on_message(filters.private & filters.text & ~filters.command())
+async def private_text(_, m):
+    await m.reply(
+        "❌ Yahan movie search nahi hota bhai 🙏\n\n"
+        "👉 Movie search karne ke liye GROUP me jao 👇",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔍 SEARCH GROUP", url=SEARCH_GROUP_LINK)]]
+        )
+        )
+    
 # ================== RUN ==================
 async def main():
     await start_web()
