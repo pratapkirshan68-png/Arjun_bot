@@ -1,5 +1,5 @@
 pyrogram
 tgcrypto
-motor
 aiohttp
+motor
 dnspython
