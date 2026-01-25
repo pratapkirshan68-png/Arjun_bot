@@ -201,7 +201,7 @@ async def delete(_, m):
     await m.reply(f"🗑 Deleted: {r.deleted_count}")
 
 # ================= PRIVATE TEXT (NO COMMAND) =================
-@bot.on_message(filters.private & filters.text & ~filters.command())
+@bot.on_message(filters.private & filters.text & ~filters.command)
 async def private_text(_, m):
     await m.reply(
         "❌ Yahan movie search nahi hota bhai 🙏\n\n"
