@@ -9,6 +9,9 @@ from pyrogram.errors import UserNotParticipant
 from bson.objectid import ObjectId
 from aiohttp import web
 
+raw_admins = os.environ.get("ADMIN_IDS", "")
+ADMIN_IDS = [int(x) for x in re.findall(r'\d+', raw_admins)]
+
 # ================= CONFIG =================
 API_ID = int(os.environ["API_ID"])
 API_HASH = os.environ["API_HASH"]
