@@ -219,7 +219,8 @@ async def add_to_db(client, msg):
 
 @app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "shortlink", "del"]))
 async def search_movie(client, msg):
-    query = clean_name(msg.text)
+    words = query.split()
+regex = ".*".join(map(re.escape, words))
     if len(query) < 3: return
 
     try: await msg.delete()
@@ -236,7 +237,9 @@ async def search_movie(client, msg):
         return
 
     try:
-        res = await client.movies.find_one({"title": {"$regex": query, "$options": "i"}})
+        res = await client.movies.find_one(
+    {"title": {"$regex": regex, "$options": "i"}}
+)
     except Exception as e:
         await sm.edit("❌ Database Error.")
         return
