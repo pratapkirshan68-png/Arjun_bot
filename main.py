@@ -223,9 +223,10 @@ async def search_movie(client, msg):
     if len(query) < 2:
         return
 
-    # 🔥 Flexible search (order + spelling tolerant)
+    # 🔥 split words & build flexible regex
     words = query.split()
     regex = ".*".join(map(re.escape, words))
+    # example: "bordar 2" -> "bordar.*2"
 
     try:
         await msg.delete()
@@ -241,8 +242,7 @@ async def search_movie(client, msg):
     )
 
     if client.movies is None:
-        await sm.edit("❌ **Error:** Database Connected Nahi Hai. Admin ko batayein.")
-        asyncio.create_task(delete_after_delay([sm], 15))
+        await sm.edit("❌ Database Connected Nahi Hai.")
         return
 
     try:
@@ -257,8 +257,7 @@ async def search_movie(client, msg):
         return
 
     if not res:
-        await sm.edit(f"❌ `{msg.text}` nahi mili! Spelling thodi alag try karein.")
-        asyncio.create_task(delete_after_delay([sm], 15))
+        await sm.edit(f"❌ `{msg.text}` nahi mili! Thoda short try karein.")
         return
 
     db_id = str(res["_id"])
@@ -278,26 +277,15 @@ async def search_movie(client, msg):
         f"✅ **Movie Mil Gayi!**\n\n"
         f"🎬 **Naam:** `{db_title}`\n"
         f"🌟 **Rating:** `{m_rating}` | 📅 **Year:** `{m_year}`\n\n"
-        f"👤 **User:** {u_name}\n🆔 **ID:** `{u_id}`\n\n"
-        f"👁️ 2  [Movies 2026 - Cinema Pratap ❤️🌹]({MAIN_CHANNEL_LINK})"
+        f"👤 **User:** {u_name}\n🆔 **ID:** `{u_id}`"
     )
 
     if poster:
-        res_msg = await client.send_photo(
-            msg.chat.id,
-            poster,
-            caption=cap,
-            reply_markup=btn
-        )
+        res_msg = await client.send_photo(msg.chat.id, poster, caption=cap, reply_markup=btn)
     else:
-        res_msg = await client.send_message(
-            msg.chat.id,
-            cap,
-            reply_markup=btn
-        )
+        res_msg = await client.send_message(msg.chat.id, cap, reply_markup=btn)
 
     await sm.delete()
-    asyncio.create_task(delete_after_delay([res_msg], 120))
 
 # ================= START / FSUB =================
 
