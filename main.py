@@ -225,7 +225,9 @@ async def search_movie(client, msg):
         return
 
     words = query.split()
-    regex = ".*".join(map(re.escape, words))
+
+# Har word ko alag-alag match karega (order free)
+regex = "|".join(words)
 
     try: await msg.delete()
     except: pass
@@ -241,9 +243,13 @@ async def search_movie(client, msg):
         return
 
     try:
-        res = await client.movies.find_one(
-    {"title": {"$regex": regex, "$options": "i"}}
-)
+        res = await client.movies.find_one({
+    "title": {
+        "$regex": f"({regex})",
+        "$options": "i"
+    }
+})
+        
     except Exception as e:
         await sm.edit("❌ Database Error.")
         return
