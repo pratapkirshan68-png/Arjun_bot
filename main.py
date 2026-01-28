@@ -219,9 +219,13 @@ async def add_to_db(client, msg):
 
 @app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "shortlink", "del"]))
 async def search_movie(client, msg):
+    query = clean_name(msg.text)
+
+    if len(query) < 3:
+        return
+
     words = query.split()
-regex = ".*".join(map(re.escape, words))
-    if len(query) < 3: return
+    regex = ".*".join(map(re.escape, words))
 
     try: await msg.delete()
     except: pass
