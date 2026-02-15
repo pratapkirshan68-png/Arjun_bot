@@ -165,11 +165,28 @@ async def search_movie(client, msg):
         asyncio.create_task(delete_after_delay([sm, msg], 15))
         return 
 
-    markup = await get_search_buttons(query, results, offset=0)
-    await client.send_message(msg.chat.id, f"🎬 **Results for:** `{msg.text}`", reply_markup=markup)
-    await sm.delete()
-    try: await msg.delete()
-    except: pass
+    async def get_search_buttons(query, results, offset=0):
+    btn_list = []
+    me = await app.get_me()
+    for res in results[offset : offset + PAGE_SIZE]:
+        db_id = str(res["_id"])
+        db_title = res["title"]
+        display_name = db_title[:35] + "..." if len(db_title) > 35 else db_title
+        bot_url = f"https://t.me/{me.username}?start=file_{db_id}"
+        final_link = await get_shortlink(bot_url)
+        btn_list.append([InlineKeyboardButton(f"🎬 {display_name}", url=final_link)])
+
+    nav_btns = []
+    if offset > 0:
+        nav_btns.append(InlineKeyboardButton("⬅️ Back", callback_data=f"page_{offset - PAGE_SIZE}_{quote(query)}"))
+    if offset + PAGE_SIZE < len(results):
+        nav_btns.append(InlineKeyboardButton("Next ➡️", callback_data=f"page_{offset + PAGE_SIZE}_{quote(query)}"))
+    
+    if nav_btns: btn_list.append(nav_btns)
+    
+    # Is link ko sahi kiya gaya hai taaki button kaam kare
+    btn_list.append([InlineKeyboardButton("📂 GET ALL FILES (IN PM) 📂", url=f"https://t.me/{me.username}?start=all_{quote(query).replace(' ', '_')}")])
+    return InlineKeyboardMarkup(btn_list)
 
 @app.on_callback_query(filters.regex(r"^page_"))
 async def handle_pagination(client, query: CallbackQuery):
