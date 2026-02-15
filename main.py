@@ -74,7 +74,7 @@ async def get_poster(query):
                 if data.get("results"):
                     poster_path = data["results"][0].get("poster_path")
                     if poster_path:
-                        return f"https://image.tmdb.org/t/p/w500{poster_path}"
+                        return f"https://image.tmdb.org/t/p/w342{poster_path}"
     except Exception as e:
         logger.error(f"TMDB Error: {e}")
     return None
