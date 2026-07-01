@@ -248,6 +248,21 @@ async def add_to_db(client, msg):
     await client.movies.insert_one({"title": title, "file_id": file.file_id})
     await msg.reply_text(f"✅ Added: {title}")
 
+@app.on_message(filters.command("del") & filters.user(ADMIN_IDS))
+async def delete_movie_cmd(client, msg):
+    if len(msg.command) < 2:
+        return await msg.reply("Usage:\n/del movie_name")
+
+    query = clean_name(" ".join(msg.command[1:]))
+
+    result = await client.movies.delete_many({
+        "title": {"$regex": query, "$options": "i"}
+    })
+
+    await msg.reply(
+        f"🗑️ Deleted: {result.deleted_count} movie(s)."
+    )
+
 # ================= RUNNER =================
 
 async def start_bot():
