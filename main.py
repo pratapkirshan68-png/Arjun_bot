@@ -193,7 +193,7 @@ async def start_handler(client, msg):
     if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
-            cap = f"📂 `{res['title']}`\n\n⚠️ **5 min mein delete ho jayegi.**"
+            cap = f"📂 `{res.get('original_title', res['title'])}`\n\n⚠️ **5 min mein delete ho jayegi.**"
             sf = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
             asyncio.create_task(delete_after_delay([sf], 300))
             
@@ -220,7 +220,7 @@ async def start_handler(client, msg):
         sent_messages = []
         for res in results:
             try:
-                m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=f"📂 `{res['title']}`\n\n⚠️ **5 min delete notice**")
+                m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=f"📂 `{res.get('original_title', res['title'])}`\n\n⚠️ **5 min delete notice**"
                 sent_messages.append(m)
                 await asyncio.sleep(1.2)
             except: pass
