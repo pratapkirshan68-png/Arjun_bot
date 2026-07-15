@@ -102,7 +102,7 @@ async def get_search_buttons(query, results, offset=0):
     me = await app.get_me()
     for res in results[offset : offset + PAGE_SIZE]:
         db_id = str(res["_id"])
-        db_title = res["title"]
+        db_title = res.get("original_title", res["title"])
         display_name = db_title[:35] + "..." if len(db_title) > 35 else db_title
         bot_url = f"https://t.me/{me.username}?start=file_{db_id}"
         final_link = await get_shortlink(bot_url)
