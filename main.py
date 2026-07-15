@@ -218,13 +218,78 @@ async def start_handler(client, msg):
 
         sts = await msg.reply(f"🚀 **Found {len(results)} files.** Sending...")
         sent_messages = []
+        # ================= START HANDLER (PM) =================
+
+@app.on_message(filters.command("start") & filters.private)
+async def start_handler(client, msg):
+    data = msg.command[1] if len(msg.command) > 1 else ""
+
+    # FSUB Check
+    try:
+        await client.get_chat_member(FSUB_CHANNEL, msg.from_user.id)
+    except UserNotParticipant:
+        invite = (await client.get_chat(FSUB_CHANNEL)).invite_link or MAIN_CHANNEL_LINK
+        me = await client.get_me()
+        buttons = [[InlineKeyboardButton("📢 JOIN CHANNEL 📢", url=invite)]]
+        if data:
+            try_again_link = f"https://t.me/{me.username}?start={data}"
+            buttons.append([InlineKeyboardButton("🔄 TRY AGAIN / VERIFY 🔄", url=try_again_link)])
+        btn = InlineKeyboardMarkup(buttons)
+        return await msg.reply("❌ Pehle channel join karein!", reply_markup=btn)
+    except:
+        pass
+
+    if not data:
+        return await msg.reply("👋 Namaste! Group me search karein.")
+
+    if data.startswith("file_"):
+        res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
+        if res:
+            cap = f"📂 `{res.get('original_title', res['title'])}`\n\n⚠️ **5 min mein delete ho jayegi.**"
+            sf = await client.send_cached_media(
+                msg.chat.id,
+                res["file_id"],
+                caption=cap
+            )
+            asyncio.create_task(delete_after_delay([sf], 300))
+
+    elif data.startswith("all_"):
+        try:
+            b64_str = data.split("_", 1)[1]
+            b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
+            search_q = base64.urlsafe_b64decode(b64_str).decode()
+        except:
+            search_q = unquote(data.split("_", 1)[1])
+
+        cursor = client.movies.find({"title": {"$regex": search_q, "$options": "i"}})
+        results = await cursor.to_list(length=100)
+
+        if not results:
+            words = search_q.split()
+            if words:
+                keyword = max(words, key=len)
+                cursor = client.movies.find({"title": {"$regex": keyword, "$options": "i"}})
+                results = await cursor.to_list(length=100)
+
+        if not results:
+            return await msg.reply("❌ Files nahi mili!")
+
+        sts = await msg.reply(f"🚀 **Found {len(results)} files. Sending...**")
+        sent_messages = []
+
         for res in results:
             try:
-                m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=f"📂 `{res.get('original_title', res['title'])}`\n\n⚠️ **5 min delete notice**"
+                m = await client.send_cached_media(
+                    msg.chat.id,
+                    res["file_id"],
+                    caption=f"📂 `{res.get('original_title', res['title'])}`\n\n⚠️ **5 min mein delete ho jayegi.**"
+                )
                 sent_messages.append(m)
                 await asyncio.sleep(1.2)
-            except: pass
-        await sts.edit(f"✅ **Batch Complete!**")
+            except:
+                pass
+
+        await sts.edit("✅ **Batch Complete!**")
         asyncio.create_task(delete_after_delay(sent_messages + [sts], 300))
 
 # ================= ADMIN COMMANDS =================
