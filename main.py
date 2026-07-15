@@ -244,9 +244,17 @@ async def stats_cmd(client, msg):
 @app.on_message(filters.chat(STORAGE_CHANNEL) & (filters.video | filters.document))
 async def add_to_db(client, msg):
     file = msg.video or msg.document
-    title = clean_name(msg.caption or file.file_name or "Unknown")
-    await client.movies.insert_one({"title": title, "file_id": file.file_id})
-    await msg.reply_text(f"✅ Added: {title}")
+
+    original_title = msg.caption or file.file_name or "Unknown"
+    search_title = clean_name(original_title)
+
+    await client.movies.insert_one({
+        "title": search_title,
+        "original_title": original_title,
+        "file_id": file.file_id
+    })
+
+    await msg.reply_text(f"✅ Added: {original_title}")
 
 @app.on_message(filters.command("del") & filters.user(ADMIN_IDS))
 async def delete_movie_cmd(client, msg):
