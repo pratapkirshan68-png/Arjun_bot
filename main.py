@@ -365,87 +365,98 @@ async def broadcast_cmd(client, msg):
     )
     await status.edit(report)
 
-# ================= AI CHAT =================
+# ================= FEATURE 7: AI CHAT (ADMIN PM ONLY) =================
 def fetch_active_model_name() -> str:
-    if not ai_client: return ""
+    """API key dwara accessible active text model fetch karta hai."""
+    if not ai_client:
+        return ""
     try:
         for model in ai_client.models.list():
             model_name = getattr(model, "name", "") or ""
             supported_actions = getattr(model, "supported_actions", []) or []
             clean_model = model_name.replace("models/", "")
+            
             if "generateContent" in supported_actions or "generate_content" in supported_actions:
                 if "flash" in clean_model.lower():
                     return clean_model
-        return "gemini-2.5-flash"
+        
+        return "gemini-1.5-flash"
     except Exception as e:
         logger.error(f"Error fetching active model list: {e}")
-        return "gemini-2.5-flash"
+        return "gemini-1.5-flash"
 
 def generate_ai_text_single_request(prompt: str) -> str:
-    if not ai_client: return "⚠️ GEMINI_API_KEY set nahi hai."
-    target_model = fetch_active_model_name()
-    if not target_model: return "⚠️ Koi active AI model nahi mila."
+    """Aapke kisi bhi sawal (Coding, General Knowledge, Logic, Chat) ka AI response deta hai."""
+    if not ai_client:
+        return "⚠️ GEMINI_API_KEY set nahi hai. Kripya environment variables check karein."
 
-    system_instruction = "You are an expert Telegram Bot developer."
+    # Active model search karo, fir fallbacks try karo
+    detected_model = fetch_active_model_name()
+    models_to_try = [detected_model, "gemini-1.5-flash", "gemini-1.5-pro"]
+    
+    system_instruction = (
+        "You are an intelligent, helpful, and friendly AI assistant and coding expert inside a Telegram bot. "
+        "Answer all questions accurately, clearly, and concisely. "
+        "You can answer in Hindi, English, or Hinglish depending on the user's input style."
+    )
 
-    try:
-        response = ai_client.models.generate_content(
-            model=target_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(system_instruction=system_instruction)
-        )
-        if response and response.text: return response.text
-        return "⚠️ AI Service se empty response mila."
-    except Exception as err:
-        return f"❌ **AI Processing Error:** `{err}`"
+    last_error = ""
+    for model_name in dict.fromkeys([m for m in models_to_try if m]):
+        try:
+            response = ai_client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction
+                )
+            )
+            if response and response.text:
+                return response.text
+        except APIError as api_err:
+            error_code = getattr(api_err, "code", None)
+            error_msg = str(api_err)
+            logger.error(f"Gemini API Error [{error_code}] on model {model_name}: {error_msg}")
+            
+            if error_code == 404 or "NOT_FOUND" in error_msg:
+                last_error = error_msg
+                continue  # Next model try karega
+            elif error_code == 429 or "RESOURCE_EXHAUSTED" in error_msg or "Quota exceeded" in error_msg:
+                return "⚠️ AI API Quota Exceeded! Kripya kuch samay baad try karein ya Gemini API Key renew karein."
+            else:
+                return f"❌ **AI API Error:** `{error_msg}`"
+        except Exception as err:
+            logger.error(f"Unexpected AI Error: {err}")
+            return f"❌ **AI Processing Error:** `{err}`"
+
+    return f"⚠️ Koi bhi active Gemini AI Model connect nahi ho paya. Error: `{last_error}`"
 
 @app.on_message(filters.private & filters.user(ADMIN_IDS) & (filters.command("ai") | ~filters.command(["start", "pratap", "del", "shortlink", "broadcast", "sms"])))
 async def ai_chat_handler(client, msg):
-    prompt = msg.text.split(" ", 1)[1] if msg.text.startswith("/ai ") else msg.text
-    if not prompt or prompt.startswith("/"): return
+    # /ai command ho ya direct private message, dono ko handle karega
+    if msg.text.startswith("/ai"):
+        prompt = msg.text.split(" ", 1)[1] if len(msg.text.split(" ", 1)) > 1 else ""
+    else:
+        prompt = msg.text
 
-    st = await msg.reply("🤖 **AI Processing...**")
+    if not prompt or prompt.startswith("/"): 
+        return await msg.reply("⚠️ Kripya koi sawal puchiye! Example: `/ai Python kya hai?` ya direct message bhejiye.")
+
+    st = await msg.reply("🤖 **Searching answer...**")
+    
     try:
         ai_reply = await asyncio.to_thread(generate_ai_text_single_request, prompt)
+        
+        # Long response handling for Telegram limits
         if len(ai_reply) > 4000:
             for i in range(0, len(ai_reply), 4000):
                 await msg.reply(ai_reply[i:i+4000])
             await st.delete()
         else:
             await st.edit(ai_reply)
+            
     except Exception as e:
+        logger.error(f"Gemini AI Handler Error: {e}")
         await st.edit(f"❌ **AI Error:** `{e}`")
-
-# ================= ADMIN COMMANDS =================
-@app.on_message(filters.command("shortlink") & filters.user(ADMIN_IDS))
-async def toggle_shortlink_cmd(client, msg):
-    global SHORTLINK_ENABLED
-    choice = msg.command[1].lower() if len(msg.command) > 1 else ""
-    if choice == "on": 
-        SHORTLINK_ENABLED = True
-        await msg.reply("✅ ON")
-    elif choice == "off": 
-        SHORTLINK_ENABLED = False
-        await msg.reply("❌ OFF")
-
-@app.on_message(filters.command("pratap") & filters.user(ADMIN_IDS))
-async def stats_cmd(client, msg):
-    count = await client.movies.count_documents({})
-    users_count = await client.users.count_documents({})
-    req_count = await client.requests.count_documents({})
-    await msg.reply(
-        f"📊 **Bot Status**\n\n"
-        f"🎬 Total Movies: `{count}`\n"
-        f"👤 Total Users: `{users_count}`\n"
-        f"📌 Pending Requests: `{req_count}`"
-    )
-
-@app.on_message(filters.command("del") & filters.user(ADMIN_IDS))
-async def delete_movie_cmd(client, msg):
-    if len(msg.command) < 2: return await msg.reply("Usage:\n/del movie_name")
-    query = clean_name(" ".join(msg.command[1:]))
-    result = await client.movies.delete_many({"title": {"$regex": query, "$options": "i"}})
-    await msg.reply(f"🗑️ Deleted: {result.deleted_count} movie(s).")
 
 # ================= RUNNER =================
 async def start_bot():
