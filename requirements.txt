@@ -5,5 +5,4 @@ pymongo
 aiohttp
 fuzzywuzzy
 python-Levenshtein
-openai
-
+google-generativeai
