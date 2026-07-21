@@ -1,6 +1,9 @@
 pyrogram
 tgcrypto
 motor
+pymongo
 aiohttp
-dnspython
-uvloop
+fuzzywuzzy
+python-Levenshtein
+openai
+
