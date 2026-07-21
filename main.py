@@ -51,17 +51,18 @@ class MovieBot(Client):
         self.requests = None
 
     async def start(self):
-        await super().start()
-        try:
-            mongo_client = AsyncIOMotorClient(MONGO_URL)
-            db = mongo_client["PratapCinemaBot"]
-            self.movies = db["movies"]
-            self.users = db["users"]
-            self.requests = db["movie_requests"]
-            print("✅ MongoDB Connected Successfully!")
-        except Exception as e:
-            print(f"❌ MongoDB Error: {e}")
-        print(f"🚀 BOT STARTED as @{self.me.username}")
+    await super().start()
+    try:
+        mongo_client = AsyncIOMotorClient(MONGO_URL)
+        db = mongo_client["PratapCinemaBot"]
+        self.movies = db["movies"]
+        self.users = db["users"]
+        self.requests = db["movie_requests"]
+        print("✅ MongoDB Connected Successfully!")
+    except Exception as e:
+        print(f"❌ MongoDB Error: {e}")
+
+    print(f"🚀 BOT STARTED as @{self.me.username}")
 
     async def stop(self, *args):
         await super().stop()
