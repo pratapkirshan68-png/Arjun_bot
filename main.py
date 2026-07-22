@@ -364,7 +364,7 @@ async def broadcast_cmd(client, msg):
     )
     await status.edit(report)
 
-# ================= FEATURE 7: AI CHAT (DIRECT GEMINI API) =================
+# ================= FEATURE 7: AI CHAT (DIRECT GEMINI API - FIXED 404) =================
 @app.on_message(filters.private & filters.user(ADMIN_IDS) & (filters.command("ai") | ~filters.command(["start", "pratap", "del", "shortlink", "broadcast", "sms"])))
 async def ai_chat_handler(client, msg):
     if not GEMINI_API_KEY:
@@ -375,7 +375,8 @@ async def ai_chat_handler(client, msg):
 
     st = await msg.reply("🤖 **AI Processing...**")
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # Stable v1 API URL
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
         "contents": [{
             "parts": [{"text": prompt}]
