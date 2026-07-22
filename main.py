@@ -364,7 +364,7 @@ async def broadcast_cmd(client, msg):
     )
     await status.edit(report)
 
-# ================= FEATURE 7: AI CHAT (AUTO-FALLBACK MODEL FIX) =================
+# ================= FEATURE 7: AI CHAT (DYNAMIC MODEL FETCH - GUARANTEED) =================
 @app.on_message(filters.private & filters.user(ADMIN_IDS) & (filters.command("ai") | ~filters.command(["start", "pratap", "del", "shortlink", "broadcast", "sms"])))
 async def ai_chat_handler(client, msg):
     if not GEMINI_API_KEY:
@@ -374,35 +374,44 @@ async def ai_chat_handler(client, msg):
     if not prompt or prompt.startswith("/"): return
 
     st = await msg.reply("🤖 **AI Processing...**")
-    
-    # Active Gemini models in 2026
-    models_to_try = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash-latest"
-    ]
-
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
-    }
     headers = {"Content-Type": "application/json"}
 
     async with aiohttp.ClientSession() as session:
-        for model in models_to_try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
-            try:
-                async with session.post(url, json=payload, headers=headers) as resp:
-                    data = await resp.json()
-                    if resp.status == 200:
-                        reply_text = data['candidates'][0]['content']['parts'][0]['text']
-                        return await st.edit(reply_text)
-            except Exception:
-                continue
+        try:
+            # Step 1: Aapki API Key ke liye Google me kaunsa model available hai wo dynamic list karo
+            list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+            async with session.get(list_url) as list_resp:
+                if list_resp.status != 200:
+                    err_data = await list_resp.json()
+                    return await st.edit(f"❌ **API Error:** `{err_data.get('error', {}).get('message', 'Key issue')}`")
+                
+                models_data = await list_resp.json()
+                valid_model = None
+                
+                # Active model search
+                for m in models_data.get('models', []):
+                    if "generateContent" in m.get('supportedGenerationMethods', []):
+                        valid_model = m['name'] # Valid model name fetch ho gaya!
+                        break
 
-        # Agar teeno model fail hote hain tabhi error aayega
-        await st.edit("❌ **AI Error:** Apke Google AI Studio account me koi bhi Gemini Flash model active nahi mil raha. Kripya new key generate karein.")
+                if not valid_model:
+                    return await st.edit("❌ **AI Error:** Apki API Key par koi generateContent model enabled nahi hai.")
+
+            # Step 2: Auto-fetched model se response generate karo
+            gen_url = f"https://generativelanguage.googleapis.com/v1beta/{valid_model}:generateContent?key={GEMINI_API_KEY}"
+            payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+            async with session.post(gen_url, json=payload, headers=headers) as resp:
+                data = await resp.json()
+                if resp.status == 200:
+                    reply_text = data['candidates'][0]['content']['parts'][0]['text']
+                    await st.edit(reply_text)
+                else:
+                    err_msg = data.get('error', {}).get('message', 'Unknown Error')
+                    await st.edit(f"❌ **AI Error:** `{err_msg}`")
+
+        except Exception as e:
+            await st.edit(f"❌ **AI Error:** `{e}`")
 
 # ================= EXISTING ADMIN COMMANDS =================
 @app.on_message(filters.command("shortlink") & filters.user(ADMIN_IDS))
