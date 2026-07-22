@@ -7,3 +7,5 @@ fuzzywuzzy
 python-Levenshtein
 openai
 google-generativeai
+google-genai
+
