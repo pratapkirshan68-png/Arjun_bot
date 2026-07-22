@@ -364,7 +364,7 @@ async def broadcast_cmd(client, msg):
     )
     await status.edit(report)
 
-# ================= FEATURE 7: AI CHAT (GROQ AI - 100% FREE & FAST) =================
+# ================= FEATURE 7: AI CHAT (GROQ AI - HINDI DEFAULT) =================
 @app.on_message(filters.private & filters.user(ADMIN_IDS) & (filters.command("ai") | ~filters.command(["start", "pratap", "del", "shortlink", "broadcast", "sms"])))
 async def ai_chat_handler(client, msg):
     GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -383,7 +383,10 @@ async def ai_chat_handler(client, msg):
     }
     payload = {
         "model": "llama-3.3-70b-versatile",
-        "messages": [{"role": "user", "content": prompt}]
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant. Always respond in natural Hinglish or Hindi unless asked otherwise."},
+            {"role": "user", "content": prompt}
+        ]
     }
 
     try:
