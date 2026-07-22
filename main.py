@@ -364,7 +364,7 @@ async def broadcast_cmd(client, msg):
     )
     await status.edit(report)
 
-# ================= FEATURE 7: AI CHAT (ADMIN PM ONLY - GEMINI FIXED) =================
+# ================= FEATURE 7: AI CHAT (ADMIN PM ONLY - FIXED MODEL) =================
 @app.on_message(filters.private & filters.user(ADMIN_IDS) & (filters.command("ai") | ~filters.command(["start", "pratap", "del", "shortlink", "broadcast", "sms"])))
 async def ai_chat_handler(client, msg):
     if not GEMINI_API_KEY:
@@ -376,7 +376,8 @@ async def ai_chat_handler(client, msg):
     st = await msg.reply("🤖 **AI Processing...**")
     
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        # 'gemini-pro' har API key aur v1beta API par 100% stable chalta hai
+        model = genai.GenerativeModel("gemini-pro")
         response = await asyncio.to_thread(model.generate_content, prompt)
         await st.edit(response.text)
     except Exception as e:
