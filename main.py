@@ -364,7 +364,7 @@ async def broadcast_cmd(client, msg):
     )
     await status.edit(report)
 
-# ================= FEATURE 7: AI CHAT (DIRECT GEMINI API - FIXED 404) =================
+# ================= FEATURE 7: AI CHAT (AUTO-FALLBACK MODEL FIX) =================
 @app.on_message(filters.private & filters.user(ADMIN_IDS) & (filters.command("ai") | ~filters.command(["start", "pratap", "del", "shortlink", "broadcast", "sms"])))
 async def ai_chat_handler(client, msg):
     if not GEMINI_API_KEY:
@@ -375,8 +375,13 @@ async def ai_chat_handler(client, msg):
 
     st = await msg.reply("🤖 **AI Processing...**")
     
-    # Stable v1 API URL
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # Active Gemini models in 2026
+    models_to_try = [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash-latest"
+    ]
+
     payload = {
         "contents": [{
             "parts": [{"text": prompt}]
@@ -384,18 +389,20 @@ async def ai_chat_handler(client, msg):
     }
     headers = {"Content-Type": "application/json"}
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers) as resp:
-                data = await resp.json()
-                if resp.status == 200:
-                    reply_text = data['candidates'][0]['content']['parts'][0]['text']
-                    await st.edit(reply_text)
-                else:
-                    err_msg = data.get('error', {}).get('message', 'Unknown Error')
-                    await st.edit(f"❌ **AI Error:** `{err_msg}`")
-    except Exception as e:
-        await st.edit(f"❌ **AI Error:** `{e}`")
+    async with aiohttp.ClientSession() as session:
+        for model in models_to_try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+            try:
+                async with session.post(url, json=payload, headers=headers) as resp:
+                    data = await resp.json()
+                    if resp.status == 200:
+                        reply_text = data['candidates'][0]['content']['parts'][0]['text']
+                        return await st.edit(reply_text)
+            except Exception:
+                continue
+
+        # Agar teeno model fail hote hain tabhi error aayega
+        await st.edit("❌ **AI Error:** Apke Google AI Studio account me koi bhi Gemini Flash model active nahi mil raha. Kripya new key generate karein.")
 
 # ================= EXISTING ADMIN COMMANDS =================
 @app.on_message(filters.command("shortlink") & filters.user(ADMIN_IDS))
