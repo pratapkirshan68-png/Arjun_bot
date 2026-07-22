@@ -1,8 +1,8 @@
 pyrogram
 tgcrypto
-pymongo
 motor
+pymongo
 aiohttp
 fuzzywuzzy
 python-Levenshtein
-google-genai
+openai
