@@ -364,36 +364,38 @@ async def broadcast_cmd(client, msg):
     )
     await status.edit(report)
 
-# ================= FEATURE 7: AI CHAT (UPDATED GEMINI 2.0 MODEL) =================
+# ================= FEATURE 7: AI CHAT (GROQ AI - 100% FREE & FAST) =================
 @app.on_message(filters.private & filters.user(ADMIN_IDS) & (filters.command("ai") | ~filters.command(["start", "pratap", "del", "shortlink", "broadcast", "sms"])))
 async def ai_chat_handler(client, msg):
-    if not GEMINI_API_KEY:
-        return await msg.reply("⚠️ Gemini API Key set nahi hai!")
+    GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+    if not GROQ_API_KEY:
+        return await msg.reply("⚠️ Groq API Key set nahi hai!")
 
     prompt = msg.text.split(" ", 1)[1] if msg.text.startswith("/ai ") else msg.text
     if not prompt or prompt.startswith("/"): return
 
     st = await msg.reply("🤖 **AI Processing...**")
     
-    # Google standard latest active model
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
     }
-    headers = {"Content-Type": "application/json"}
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": prompt}]
+    }
 
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=payload, headers=headers) as resp:
                 data = await resp.json()
                 if resp.status == 200:
-                    reply_text = data['candidates'][0]['content']['parts'][0]['text']
+                    reply_text = data['choices'][0]['message']['content']
                     await st.edit(reply_text)
                 else:
                     err_msg = data.get('error', {}).get('message', 'Unknown Error')
-                    await st.edit(f"❌ **AI Error:** `{err_msg}`")
+                    await st.edit(f"❌ **Groq AI Error:** `{err_msg}`")
     except Exception as e:
         await st.edit(f"❌ **AI Error:** `{e}`")
 
