@@ -218,15 +218,31 @@ async def search_movie(client, msg):
             "Jaise hi movie database me add hogi, aapko automatically private message (SMS) mil jayega."
         )
         
+        user_name = msg.from_user.first_name if msg.from_user else "Unknown User"
+        user_id = msg.from_user.id if msg.from_user else 0
+        
+        # MongoDB me request save
         await client.requests.update_one(
-            {"user_id": msg.from_user.id, "query": query},
-            {"$set": {"user_id": msg.from_user.id, "query": query, "time": datetime.now()}},
+            {"user_id": user_id, "query": query},
+            {"$set": {"user_id": user_id, "user_name": user_name, "query": query, "raw_query": msg.text, "time": datetime.now()}},
             upsert=True
         )
         
+        # ADMIN KO DIRECT INSTANT SMS / NOTIFICATION
+        admin_alert = (
+            f"📌 **NEW MOVIE REQUEST!**\n\n"
+            f"👤 **User:** [{user_name}](tg://user?id={user_id}) (`{user_id}`)\n"
+            f"🎬 **Movie:** `{msg.text}`"
+        )
+        for admin_id in ADMIN_IDS:
+            try:
+                await client.send_message(admin_id, admin_alert)
+            except:
+                pass
+        
         if not is_admin:
             asyncio.create_task(delete_after_delay([req_msg, msg], 60))
-        return 
+        return
 
     poster = await get_poster(query)
     markup = await get_search_buttons(query, results, offset=0)
@@ -431,6 +447,29 @@ async def delete_movie_cmd(client, msg):
         "title": {"$regex": query, "$options": "i"}
     })
     await msg.reply(f"🗑️ Deleted: {result.deleted_count} movie(s).")
+
+@app.on_message(filters.command("requests"))
+async def list_requests_cmd(client, msg):
+    """Pending requested movies ki list dekhne ke liye"""
+    if ADMIN_IDS and msg.from_user.id not in ADMIN_IDS:
+        return await msg.reply("❌ Aap admin nahi hain!")
+        
+    reqs = await client.requests.find({}).to_list(length=100)
+    if not reqs:
+        return await msg.reply("✅ Koi pending requests nahi hain!")
+        
+    text = f"📌 **Pending Movie Requests ({len(reqs)}):**\n\n"
+    for idx, r in enumerate(reqs, 1):
+        u_name = r.get("user_name", "User")
+        u_id = r.get("user_id", "N/A")
+        movie = r.get("raw_query", r.get("query", "Unknown"))
+        text += f"{idx}. 🎬 `{movie}`\n   👤 [{u_name}](tg://user?id={u_id}) (`{user_id}`)\n\n"
+        
+    if len(text) > 4000:
+        for i in range(0, len(text), 4000):
+            await msg.reply(text[i:i+4000])
+    else:
+        await msg.reply(text)
 
 # ================= RUNNER =================
 async def start_bot():
