@@ -180,7 +180,7 @@ async def delete_after_delay(msgs, delay):
         except: pass
 
 # ================= AUTO-FILTER SEARCH (GROUP) =================
-@app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "delall", "del", "shortlink", "broadcast", "sms", "ai", "requests"]))
+@app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "delall", "del", "shortlink", "broadcast", "sms", "details", "tmdb"]))
 async def search_movie(client, msg):
     is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
     query = clean_name(msg.text)
