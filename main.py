@@ -498,7 +498,6 @@ async def delete_movie_cmd(client, msg):
 
 @app.on_message(filters.command("requests"))
 async def list_requests_cmd(client, msg):
-    """Pending requested movies ki list dekhne ke liye"""
     if ADMIN_IDS and msg.from_user.id not in ADMIN_IDS:
         return await msg.reply("❌ Aap admin nahi hain!")
         
@@ -506,12 +505,19 @@ async def list_requests_cmd(client, msg):
     if not reqs:
         return await msg.reply("✅ Koi pending requests nahi hain!")
         
-    text = f"📌 **Pending Movie Requests ({len(reqs)}):**\n\n"
+    text = f"📥 **PENDING MOVIE REQUESTS ({len(reqs)}):**\n\n"
     for idx, r in enumerate(reqs, 1):
         u_name = r.get("user_name", "User")
         u_id = r.get("user_id", "N/A")
         movie = r.get("raw_query", r.get("query", "Unknown"))
-        text += f"{idx}. 🎬 `{movie}`\n   👤 [{u_name}](tg://user?id={u_id}) (`{user_id}`)\n\n"
+        t_title = r.get("tmdb_title", "N/A")
+        t_date = r.get("tmdb_date", "N/A")
+        
+        text += (
+            f"**{idx}.** 🎬 `{movie}`\n"
+            f"   👤 [{u_name}](tg://user?id={u_id}) (`{u_id}`)\n"
+            f"   📌 TMDB: {t_title} | Date: {t_date}\n\n"
+        )
         
     if len(text) > 4000:
         for i in range(0, len(text), 4000):
