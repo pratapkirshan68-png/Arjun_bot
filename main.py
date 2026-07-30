@@ -221,6 +221,54 @@ async def search_movie(client, msg):
         user_name = msg.from_user.first_name if msg.from_user else "Unknown User"
         user_id = msg.from_user.id if msg.from_user else 0
         
+        # TMDB se Title aur Date nikalna notification ke liye
+        tmdb_title, tmdb_date = "N/A", "N/A"
+        if TMDB_API_KEY:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(msg.text)}") as resp:
+                        data = await resp.json()
+                        if data.get("results"):
+                            first_res = data["results"][0]
+                            tmdb_title = first_res.get("title") or first_res.get("name") or "N/A"
+                            tmdb_date = first_res.get("release_date") or first_res.get("first_air_date") or "N/A"
+            except Exception:
+                pass
+
+        # Database me Save
+        await client.requests.update_one(
+            {"user_id": user_id, "query": query},
+            {"$set": {
+                "user_id": user_id, 
+                "user_name": user_name, 
+                "query": query, 
+                "raw_query": msg.text,
+                "tmdb_title": tmdb_title,
+                "tmdb_date": tmdb_date,
+                "time": datetime.now()
+            }},
+            upsert=True
+        )
+        
+        # Purana Exact Notification Format (Jo screenshot 1 me tha)
+        admin_alert = (
+            f"📥 **NEW MOVIE REQUEST**\n\n"
+            f"🎬 **Requested Movie:** {msg.text}\n"
+            f"👤 **User:** [{user_name}](tg://user?id={user_id})\n"
+            f"🆔 **User ID:** `{user_id}`\n"
+            f"📌 **TMDB Title:** {tmdb_title} | **Date:** {tmdb_date}"
+        )
+        
+        for admin_id in ADMIN_IDS:
+            try:
+                await client.send_message(admin_id, admin_alert)
+            except Exception as e:
+                logger.error(f"Failed to send admin notification: {e}")
+        
+        if not is_admin:
+            asyncio.create_task(delete_after_delay([req_msg, msg], 60))
+        return
+        
         # MongoDB me request save
         await client.requests.update_one(
             {"user_id": user_id, "query": query},
