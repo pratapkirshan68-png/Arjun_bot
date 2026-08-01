@@ -84,22 +84,7 @@ app_thumb = Client(
 
 user_thumbnails = {}
 
-# ================= BOT 2 HANDLERS (Poster Changer) =================
-@app_thumb.on_message(filters.command("start") & filters.private)
-async def thumb_start(client, msg):
-    await msg.reply("👋 **Namaste! Main Fast Poster Changer Bot hoon.**\n\n1️⃣ Mujhe new **Poster Image** bheinjiye.\n2️⃣ Uske baad apni **Video/Movie File** bhejiye.")
-
-@app_thumb.on_message(filters.photo & filters.private)
-async def save_poster(client, msg):
-    user_id = msg.from_user.id
-    st = await msg.reply("🖼️ **Poster Download Ho Raha Hai...**")
-    try:
-        photo_path = await msg.download()
-        user_thumbnails[user_id] = photo_path
-        await st.edit("✅ **Poster Saved Successfully!**\n\nAb apni Movie/Video File bhejiye, main Instant naye poster ke sath attach kar dunga.")
-    except Exception as e:
-        await st.edit(f"❌ Poster save nahi ho paya: {e}")
-
+# ================= FIXED POSTER CHANGER HANDLER =================
 @app_thumb.on_message((filters.video | filters.document) & filters.private)
 async def apply_poster(client, msg):
     user_id = msg.from_user.id
@@ -108,19 +93,29 @@ async def apply_poster(client, msg):
     if not thumb or not os.path.exists(thumb):
         return await msg.reply("⚠️ **Pehle Poster Photo Bhejiye!**\n\nUske baad file send kijiye.")
 
-    st = await msg.reply("⚡ **Fast Processing... Bina Download Kiye Poster Change Ho Raha Hai!**")
+    st = await msg.reply("⚡ **Processing... Naya Poster Attach Ho Raha Hai!**")
 
     try:
-        file_id = msg.video.file_id if msg.video else msg.document.file_id
         caption = msg.caption or ""
-
-        await client.send_video(
-            chat_id=msg.chat.id,
-            video=file_id,
-            caption=caption,
-            thumb=thumb,
-            supports_streaming=True
-        )
+        
+        # Agar Document format mein file aayi hai
+        if msg.document:
+            await client.send_document(
+                chat_id=msg.chat.id,
+                document=msg.document.file_id,
+                caption=caption,
+                thumb=thumb
+            )
+        # Agar Direct Video format mein file aayi hai
+        elif msg.video:
+            await client.send_video(
+                chat_id=msg.chat.id,
+                video=msg.video.file_id,
+                caption=caption,
+                thumb=thumb,
+                supports_streaming=True
+            )
+            
         await st.edit("🎉 **Naya Poster Lag Gaya Hai!**")
     except Exception as e:
         await st.edit(f"❌ Error: {str(e)}")
