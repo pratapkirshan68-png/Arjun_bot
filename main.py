@@ -89,23 +89,26 @@ def clean_name(text):
         return ""
     text = str(text).lower()
 
-    # Remove Telegram Usernames/Handles & URLs
+    # Telegram Usernames, Links & Brackets content remove
     text = re.sub(r'@[a-zA-Z0-9_]+', '', text)
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
+    text = re.sub(r'\(.*?\)|\[.*?\]', '', text)
 
-    # Clean Extra Junk Words, Years & Tags
+    # Web Series Tags & Junk Words
     junk = [
         r'\b(19|20)\d{2}\b',
-        r'1080p', r'720p', r'480p', r'2160p', r'4k',
-        r'x264', r'x265', r'hevc', r'webrip', r'web-dl', r'bluray', r'camrip',
-        r'pre-dvd', r'hdtv', r'hindi', r'english', r'italian', r'dual audio', r'esubs',
-        r'sub', r'aac', r'dd5', r'lol', r'mkv', r'mp4', r'avi', r'ms', r'join', r'hd'
+        r's\d{1,2}e\d{1,2}', r's\d{1,2}', r'e\d{1,2}', r'season\s*\d+', r'episodes?\s*\d+',
+        r'combined', r'complete', r'part\s*\d+', r'vol\s*\d+',
+        r'1080p', r'720p', r'480p', r'2160p', r'4k', r'hevc', r'x264', r'x265',
+        r'webrip', r'web-dl', r'bluray', r'camrip', r'pre-dvd', r'hdtv',
+        r'hindi', r'english', r'italian', r'dual audio', r'esubs', r'sub',
+        r'aac', r'dd5', r'lol', r'mkv', r'mp4', r'avi', r'ms', r'join', r'hd'
     ]
 
     for word in junk:
         text = re.sub(word, '', text, flags=re.IGNORECASE)
 
-    # Remove special characters & clean extra spaces
+    # Special characters clean & extra spaces remove
     text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
     return " ".join(text.split()).strip()
 
