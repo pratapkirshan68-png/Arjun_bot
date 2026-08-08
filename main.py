@@ -417,14 +417,20 @@ async def add_to_db(client, msg):
     raw_caption = msg.caption or file.file_name or "Unknown Movie"
     search_title = clean_name(raw_caption)
 
-    # DB Sync
+    # 1. DB Sync
     await client.movies.insert_one({
         "title": search_title,
         "original_title": raw_caption,
         "file_id": file.file_id
     })
 
-    status_msg = await msg.reply_text(f"✅ File DB me Add ho gayi!\nClean Name: `{search_title}`\n⏳ TMDB details aur Poster fetch ho raha hai...")
+    status_msg = await msg.reply_text(f"✅ File DB me Add ho gayi!\nClean Name: `{search_title}`\n⏳ Checking Duplicate Poster...")
+
+    # 2. Check Duplicate Poster (Agar iss movie ka poster pehle se post hai toh dobara nahi karega)
+    already_posted = await client.movies.count_documents({"title": search_title})
+    if already_posted > 1:
+        await status_msg.edit_text(f"✅ File DB me Add ho gayi!\n⚠️ **Duplicate Poster Skipped:** `{search_title}` ka poster pehle se Channel par hai.")
+        return
 
     # Group Link Fetch
     group_link = MAIN_CHANNEL_LINK
@@ -480,10 +486,10 @@ async def add_to_db(client, msg):
     try:
         if poster_url:
             await client.send_photo(target_channel, photo=poster_url, caption=caption_text, reply_markup=buttons)
-            await status_msg.edit_text("✅ Database Updated & Channel Poster Posted with TMDB details!")
+            await status_msg.edit_text("✅ Database Updated & Channel Poster Posted!")
         else:
             await client.send_message(target_channel, text=caption_text, reply_markup=buttons)
-            await status_msg.edit_text("⚠️ Database Updated! (TMDB poster nahi mila, text post bheja hai).")
+            await status_msg.edit_text("⚠️ Database Updated! (Text post sent).")
     except Exception as e:
         logger.error(f"Auto Poster Error: {e}")
         await status_msg.edit_text(f"❌ Channel Post Error: `{e}`")
