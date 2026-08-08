@@ -402,54 +402,87 @@ async def list_requests_cmd(client, msg):
     for chunk in chunks:
         await msg.reply(chunk, disable_web_page_preview=True)
 
-# ================= STORAGE UPLOAD, AUTO NOTIFY & AUTO POSTER =================
+# ================= STORAGE UPLOAD & AUTO POSTER =================
 @app.on_message(filters.chat(STORAGE_CHANNEL) & (filters.video | filters.document | filters.forwarded))
 async def add_to_db(client, msg):
     file = msg.video or msg.document
-    if not file: return
-    
+    if not file:
+        return
+
     raw_caption = msg.caption or file.file_name or "Unknown Movie"
     search_title = clean_name(raw_caption)
-    
+
     # DB Sync
     await client.movies.insert_one({
         "title": search_title,
         "original_title": raw_caption,
         "file_id": file.file_id
     })
-    
-    status_msg = await msg.reply_text(f"✅ **File DB me Add ho gayi!**\n🔍 Clean Name: `{search_title}`\n⏳ Poster dhundh rahe hain...")
 
-    # AUTO POSTER TO MAIN CHANNEL
-    try:
-        poster = await get_poster(search_title)
-        
+    status_msg = await msg.reply_text(f"✅ File DB me Add ho gayi!\nClean Name: `{search_title}`\n⏳ TMDB details aur Poster fetch ho raha hai...")
+
+    # Group Link Fetch
+    group_link = MAIN_CHANNEL_LINK
+    if SEARCH_CHAT and SEARCH_CHAT != 0:
         try:
             search_group = await client.get_chat(SEARCH_CHAT)
-            group_link = search_group.invite_link or MAIN_CHANNEL_LINK
+            group_link = search_group.invite_link or (f"https://t.me/{search_group.username}" if search_group.username else MAIN_CHANNEL_LINK)
         except Exception:
             group_link = MAIN_CHANNEL_LINK
 
-        caption_text = (
-            f"🎬 **NEW MOVIE DROP** 🎬\n\n"
-            f"📌 **Title:** `{raw_caption}`\n\n"
-            f"👇 **Download / Get File From Group:**"
-        )
-        buttons = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔍 GET MOVIE HERE 🔍", url=group_link)]
-        ])
+    # Fetch TMDB Details & Poster
+    poster_url = None
+    rel_date = "N/A"
+    rating = "N/A"
+    title_display = search_title
 
-        if poster:
-            await client.send_photo(FSUB_CHANNEL, photo=poster, caption=caption_text, reply_markup=buttons)
-            await status_msg.edit_text(f"✅ **Database Updated & Channel Poster Posted!**\n🖼️ Poster: Found")
+    if TMDB_API_KEY:
+        try:
+            url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(search_title)}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        results = data.get("results", [])
+                        if results:
+                            item = results[0]
+                            title_display = item.get("title") or item.get("name") or search_title
+                            rel_date = item.get("release_date") or item.get("first_air_date") or "N/A"
+                            rating = item.get("vote_average", "N/A")
+                            p_path = item.get("poster_path")
+                            if p_path:
+                                poster_url = f"https://image.tmdb.org/t/p/w500{p_path}"
+        except Exception as e:
+            logger.error(f"TMDB Fetch Error: {e}")
+
+    # New Formatted Caption
+    caption_text = (
+        f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
+        f"📌 **TITLE :** `{title_display}`\n"
+        f"📅 **RELEASE DATE :** `{rel_date}`\n"
+        f"⭐ **RATING :** `{rating} / 10`\n"
+        f"📁 **FILE NAME :** `{raw_caption}`\n\n"
+        f"👇 **DOWNLOAD HERE** 👇\n"
+        f"Movie ka naam copy karke search group me likh dena he."
+    )
+
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔍 GET MOVIE HERE 🔍", url=group_link)]
+    ])
+
+    # Send Post to Channel
+    target_channel = FSUB_CHANNEL or "@muviechenema"
+    try:
+        if poster_url:
+            await client.send_photo(target_channel, photo=poster_url, caption=caption_text, reply_markup=buttons)
+            await status_msg.edit_text("✅ Database Updated & Channel Poster Posted with TMDB details!")
         else:
-            await client.send_message(FSUB_CHANNEL, text=caption_text, reply_markup=buttons)
-            await status_msg.edit_text(f"⚠️ **Database Updated!**\n❌ TMDB par poster nahi mila, Channel me Text message bheja gaya.")
-
+            await client.send_message(target_channel, text=caption_text, reply_markup=buttons)
+            await status_msg.edit_text("⚠️ Database Updated! (TMDB poster nahi mila, text post bheja hai).")
     except Exception as e:
-        logger.error(f"Auto Poster Channel Send Error: {e}")
-        await status_msg.edit_text(f"✅ **Database Updated!**\n❌ Channel Post Error: `{e}`")
-
+        logger.error(f"Auto Poster Error: {e}")
+        await status_msg.edit_text(f"❌ Channel Post Error: `{e}`")
+        
     # NOTIFY REQUESTED USERS
     try:
         all_requests = await client.requests.find({}).to_list(length=5000)
