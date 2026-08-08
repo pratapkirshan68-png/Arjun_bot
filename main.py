@@ -85,23 +85,28 @@ app = MovieBot()
 
 # ================= IMPROVED HELPERS & UTILS =================
 def clean_name(text):
-    if not text: return ""
+    if not text:
+        return ""
     text = str(text).lower()
-    # Remove Telegram Usernames/Handles
+
+    # Remove Telegram Usernames/Handles & URLs
     text = re.sub(r'@[a-zA-Z0-9_]+', '', text)
-    # Remove URL links
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
-    # Junk patterns
+
+    # Clean Extra Junk Words, Years & Tags
     junk = [
-        r'\(.*?\)', r'\[.*?\]', '1080p', '720p', '480p', '2160p', '4k', 
-        'x264', 'x265', 'hevc', 'webrip', 'web-dl', 'bluray', 'camrip', 
-        'pre-dvd', 'hdtv', 'hindi', 'english', 'dual audio', 'esubs', 
-        'sub', 'aac', 'dd5', '1', '5', 'lol', 'mkv', 'mp4', 'avi'
+        r'\b(19|20)\d{2}\b',
+        r'1080p', r'720p', r'480p', r'2160p', r'4k',
+        r'x264', r'x265', r'hevc', r'webrip', r'web-dl', r'bluray', r'camrip',
+        r'pre-dvd', r'hdtv', r'hindi', r'english', r'italian', r'dual audio', r'esubs',
+        r'sub', r'aac', r'dd5', r'lol', r'mkv', r'mp4', r'avi', r'ms', r'join', r'hd'
     ]
-    for word in junk: 
+
+    for word in junk:
         text = re.sub(word, '', text, flags=re.IGNORECASE)
-    # Remove special characters
-    text = re.sub(r'[^a-zA-Z0-9\s\u0900-\u097F]', ' ', text)
+
+    # Remove special characters & clean extra spaces
+    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
     return " ".join(text.split()).strip()
 
 async def get_poster(query):
