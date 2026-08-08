@@ -1,4 +1,4 @@
-import os
+⅘import os
 import re
 import asyncio
 import aiohttp
@@ -30,9 +30,19 @@ GEMINI_API_KEY = get_clean_var("GEMINI_API_KEY", "")
 raw_admins = get_clean_var("ADMIN_IDS", "0").replace(",", " ").split()
 ADMIN_IDS = [int(x) for x in raw_admins if x.strip().isdigit()]
 
-STORAGE_CHANNEL = int(get_clean_var("STORAGE_CHANNEL", "0")) 
-SEARCH_CHAT = int(get_clean_var("SEARCH_CHAT", "0")) 
-FSUB_CHANNEL = int(get_clean_var("FSUB_CHANNEL", "0")) 
+# Helper to handle both integer IDs and string Usernames (@channel)
+def parse_chat_id(key):
+    val = get_clean_var(key, "0")
+    if val.startswith("-100") or val.lstrip("-").isdigit():
+        try:
+            return int(val)
+        except ValueError:
+            return val
+    return val
+
+STORAGE_CHANNEL = parse_chat_id("STORAGE_CHANNEL")
+SEARCH_CHAT = parse_chat_id("SEARCH_CHAT")
+FSUB_CHANNEL = parse_chat_id("FSUB_CHANNEL")
 MAIN_CHANNEL_LINK = get_clean_var("MAIN_CHANNEL_LINK", "https://t.me/Movies2026Cinema")
 SHORT_DOMAIN = get_clean_var("SHORT_DOMAIN", "arolinks.com")
 SHORT_API_KEY = get_clean_var("SHORT_API_KEY", "")
