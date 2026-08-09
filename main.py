@@ -353,7 +353,7 @@ if data.startswith("file_"):
                 sf = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
             asyncio.create_task(delete_after_delay([sf], 300))
 
-    elif data.startswith("all_"):
+elif data.startswith("all_"):
         try:
             b64_str = data.split("_", 1)[1]
             b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
