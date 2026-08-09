@@ -342,38 +342,40 @@ async def start_handler(client, msg):
     except: pass
     
     if not data: return await msg.reply("👋 Namaste! Group me search karein.")
-    
-    if data.startswith("file_"):
+if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
-            cap = f"📂 `{res.get('original_title', res['title'])}`\n\n⚠️ **5 min mein delete ho jayegi.**"
-            sf = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
+            cap = f"📁 **{res.get('original_title', res['title'])}**\n\n⚠️ **5 min mein delete ho jayegi.**"
+            poster = res.get("poster") or res.get("poster_url")
+            if poster:
+                sf = await client.send_photo(msg.chat.id, photo=poster, caption=cap)
+            else:
+                sf = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
             asyncio.create_task(delete_after_delay([sf], 300))
-            
+
     elif data.startswith("all_"):
         try:
             b64_str = data.split("_", 1)[1]
             b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
-            search_q = base64.urlsafe_b64encode(b64_str).decode()
+            search_q = base64.urlsafe_b64decode(b64_str).decode()
         except: search_q = unquote(data.split("_", 1)[1])
-        
+
         results = await smart_db_search(client, search_q)
         if not results: return await msg.reply("❌ Files nahi mili!")
-        
-        sts = await msg.reply(f"🚀 **Found {len(results)} files. Sending...**")
+
+        sts = await msg.reply(f"⏳ **Found {len(results)} files. Sending...**")
         sent_messages = []
         for res in results:
             try:
-                m = await client.send_cached_media(
-                    msg.chat.id,
-                    res["file_id"],
-                    caption=f"📂 `{res.get('original_title', res['title'])}`\n\n⚠️ **5 min mein delete ho jayegi.**"
-                )
+                cap = f"📁 **{res.get('original_title', res['title'])}**\n\n⚠️ **5 min mein delete ho jayegi.**"
+                poster = res.get("poster") or res.get("poster_url")
+                if poster:
+                    m = await client.send_photo(msg.chat.id, photo=poster, caption=cap)
+                else:
+                    m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
                 sent_messages.append(m)
                 await asyncio.sleep(1.2)
             except: pass
-        await sts.edit("✅ **Batch Complete!**")
-        asyncio.create_task(delete_after_delay(sent_messages + [sts], 300))
 
 # ================= REQUESTS VIEWER COMMAND =================
 @app.on_message(filters.command("requests"))
