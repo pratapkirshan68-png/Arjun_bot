@@ -318,10 +318,11 @@ async def search_movie(client, msg):
     await sm.delete()
     
     if not is_admin:
-        try: await msg.delete()
-        except: pass
-        asyncio.create_task(delete_after_delay([res_msg], 300))
-
+            try:
+                await msg.delete()
+            except Exception:
+                pass
+            asyncio.create_task(delete_after_delay([res_msg], 300))
 # ------------ START HANDLER (PM) ------------
 @app.on_message(filters.command("start") & filters.private)
 async def start_handler(client, msg):
