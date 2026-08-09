@@ -344,7 +344,7 @@ async def start_handler(client, msg):
     if not data:
         return await msg.reply("👋 Namaste! Group me search karein.")
 
- if data.startswith("file_"):
+if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             title = res.get('original_title', res.get('title', 'Movie'))
