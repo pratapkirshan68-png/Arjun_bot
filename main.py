@@ -344,27 +344,18 @@ async def start_handler(client, msg):
     if not data:
         return await msg.reply("👋 Namaste! Group me search karein.")
 
-    if data.startswith("file_"):
+if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             title = res.get('original_title', res.get('title', 'Movie'))
             file_name = res.get('file_name', title)
+            cap = f"📁 **{file_name}**\n\n⚠️ **Ye message 5 min mein delete ho jayega. Apne Saved Messages me forward kar lein!**"
             
-            # TMDB ya Database se poster fetch karein
-            poster = res.get("poster") or res.get("poster_url")
-            if not poster:
-                poster = await get_poster(clean_name(title))
-
-            # Reference screenshot wala exact caption format
-            cap = (
-                f"JOIN ❤️: @Movies2026Cinema\n\n"
-                f"File: {file_name}\n"
-                f"Movie: {title}\n\n"
-                f"⚠️ 5 min mein delete ho jayegi."
-            )
-
-            sent_msgs = []
-
+            # Direct Video File Bheje
+            sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap)
+            
+            # Auto Delete (5 Minutes)
+            asyncio.create_task(delete_after_delay([sf], 300))
             # Exact Single Photo Card jisme Video Link Embed hoga
             if poster:
                 try:
