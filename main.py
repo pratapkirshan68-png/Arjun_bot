@@ -94,15 +94,15 @@ def clean_name(text):
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
     text = re.sub(r'\(.*?\)|\[.*?\]', '', text)
 
-    # Web Series Tags & Junk Words
+    # Web Series Tags, Quality, Formats & Junk Words
     junk = [
         r'\b(19|20)\d{2}\b',
         r's\d{1,2}e\d{1,2}', r's\d{1,2}', r'e\d{1,2}', r'season\s*\d+', r'episodes?\s*\d+',
         r'combined', r'complete', r'part\s*\d+', r'vol\s*\d+',
         r'1080p', r'720p', r'480p', r'2160p', r'4k', r'hevc', r'x264', r'x265',
-        r'webrip', r'web-dl', r'bluray', r'camrip', r'pre-dvd', r'hdtv',
+        r'web-?dl', r'web-?rip', r'bluray', r'camrip', r'pre-?dvd', r'hdtv', r'hdrip', r'hsrip', r'hs', r'dl',
         r'hindi', r'english', r'italian', r'dual audio', r'esubs', r'sub',
-        r'aac', r'dd5', r'lol', r'mkv', r'mp4', r'avi', r'ms', r'join', r'hd'r'SO1', r'SO2',  r'SO3', r'SO4', r'SO5', r'SO6', r'Hs' , r'Dl Hindi  Mkv' , r'JOIN ❤️: @Movies2026Cinema'
+        r'aac', r'dd5', r'lol', r'mkv', r'mp4', r'avi', r'ms', r'join', r'hd'
     ]
 
     for word in junk:
@@ -111,7 +111,7 @@ def clean_name(text):
     # Special characters clean & extra spaces remove
     text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
     return " ".join(text.split()).strip()
-
+    
 async def get_poster(query):
     clean_q = clean_name(query)
     if not TMDB_API_KEY or not clean_q: 
