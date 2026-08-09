@@ -344,39 +344,17 @@ async def start_handler(client, msg):
     if not data:
         return await msg.reply("👋 Namaste! Group me search karein.")
 
-if data.startswith("file_"):
+ if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             title = res.get('original_title', res.get('title', 'Movie'))
             file_name = res.get('file_name', title)
             cap = f"📁 **{file_name}**\n\n⚠️ **Ye message 5 min mein delete ho jayega. Apne Saved Messages me forward kar lein!**"
             
-            # Direct Video File Bheje
             sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap)
-            
-            # Auto Delete (5 Minutes)
             asyncio.create_task(delete_after_delay([sf], 300))
-            # Exact Single Photo Card jisme Video Link Embed hoga
-            if poster:
-                try:
-                    p_msg = await client.send_photo(
-                        chat_id=msg.chat.id,
-                        photo=poster,
-                        caption=cap
-                    )
-                    sent_msgs.append(p_msg)
-                except Exception:
-                    pass
-
-            # Agar photo fail ho toh fallback file send karega
-            if not sent_msgs:
-                sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap)
-                sent_msgs.append(sf)
-
-            # Auto Delete (5 Minutes)
-            asyncio.create_task(delete_after_delay(sent_msgs, 300))
-
-    elif data.startswith("all_"):
+            
+  elif data.startswith("all_"):
         try:
             b64_str = data.split("_", 1)[1]
             b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
