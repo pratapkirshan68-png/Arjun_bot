@@ -350,7 +350,6 @@ async def start_handler(client, msg):
             title = res.get('original_title', res.get('title', 'Movie'))
             cap = f"📁 **{title}**\n\n⚠️ **Ye message 5 min mein delete ho jayega. Apne Saved Messages me forward kar lein!**"
             poster = res.get("poster") or res.get("poster_url")
-            
             sent_msgs = []
             
             # 1. Compact Poster Photo Send Karega
