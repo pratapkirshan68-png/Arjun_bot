@@ -348,27 +348,41 @@ async def start_handler(client, msg):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             title = res.get('original_title', res.get('title', 'Movie'))
-            cap = f"📁 **{title}**\n\n⚠️ **Ye message 5 min mein delete ho jayega. Apne Saved Messages me forward kar lein!**"
-            poster = res.get("poster") or res.get("poster_url")
-            sent_msgs = []
+            file_name = res.get('file_name', title)
             
-            # 1. Compact Poster Photo Send Karega
+            # TMDB ya Database se poster fetch karein
+            poster = res.get("poster") or res.get("poster_url")
+            if not poster:
+                poster = await get_poster(clean_name(title))
+
+            # Reference screenshot wala exact caption format
+            cap = (
+                f"JOIN ❤️: @Movies2026Cinema\n\n"
+                f"File: {file_name}\n"
+                f"Movie: {title}\n\n"
+                f"⚠️ 5 min mein delete ho jayegi."
+            )
+
+            sent_msgs = []
+
+            # Exact Single Photo Card jisme Video Link Embed hoga
             if poster:
                 try:
                     p_msg = await client.send_photo(
-                        msg.chat.id, 
-                        photo=poster, 
-                        caption=f"🎬 **{title}**\n\nJOIN ❤️: @Movies2026Cinema"
+                        chat_id=msg.chat.id,
+                        photo=poster,
+                        caption=cap
                     )
                     sent_msgs.append(p_msg)
-                except Exception as e:
+                except Exception:
                     pass
-            
-            # 2. Direct Video File Send Karega
-            sf = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
-            sent_msgs.append(sf)
-            
-            # 3. Auto Delete (5 Minutes)
+
+            # Agar photo fail ho toh fallback file send karega
+            if not sent_msgs:
+                sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap)
+                sent_msgs.append(sf)
+
+            # Auto Delete (5 Minutes)
             asyncio.create_task(delete_after_delay(sent_msgs, 300))
 
     elif data.startswith("all_"):
