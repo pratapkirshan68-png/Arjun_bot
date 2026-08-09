@@ -358,10 +358,12 @@ if data.startswith("file_"):
             b64_str = data.split("_", 1)[1]
             b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
             search_q = base64.urlsafe_b64decode(b64_str).decode()
-        except: search_q = unquote(data.split("_", 1)[1])
+        except:
+            search_q = unquote(data.split("_", 1)[1])
 
         results = await smart_db_search(client, search_q)
-        if not results: return await msg.reply("❌ Files nahi mili!")
+        if not results:
+            return await msg.reply("❌ Files nahi mili!")
 
         sts = await msg.reply(f"⏳ **Found {len(results)} files. Sending...**")
         sent_messages = []
@@ -375,8 +377,11 @@ if data.startswith("file_"):
                     m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
                 sent_messages.append(m)
                 await asyncio.sleep(1.2)
-            except: pass
+            except:
+                pass
 
+        await sts.edit("✅ **Batch Complete!**")
+        asyncio.create_task(delete_after_delay(sent_messages + [sts], 300))
 # ================= REQUESTS VIEWER COMMAND =================
 @app.on_message(filters.command("requests"))
 async def list_requests_cmd(client, msg):
