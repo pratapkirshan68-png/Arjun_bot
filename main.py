@@ -100,9 +100,10 @@ def clean_name(text):
         r's\d{1,2}e\d{1,2}', r's\d{1,2}', r'e\d{1,2}', r'season\s*\d+', r'episodes?\s*\d+',
         r'combined', r'complete', r'part\s*\d+', r'vol\s*\d+',
         r'1080p', r'720p', r'480p', r'2160p', r'4k', r'hevc', r'x264', r'x265',
-        r'web-?dl', r'web-?rip', r'bluray', r'camrip', r'pre-?dvd', r'hdtv', r'hdrip', r'hsrip', r'hs', r'dl',
+        r'web-?dl', r'web-?rip', r'bluray', r'camrip', r'pre-?dvd', r'hdtv', r'hdrip', r'hsrip',
+        r'\bweb\b', r'\bdl\b', r'\bhs\b', r'\bhd\b', r'\bmkv\b', r'\bmp4\b', r'\bavi\b',
         r'hindi', r'english', r'italian', r'dual audio', r'esubs', r'sub',
-        r'aac', r'dd5', r'lol', r'mkv', r'mp4', r'avi', r'ms', r'join', r'hd'
+        r'aac', r'dd5', r'lol', r'ms', r'join'
     ]
 
     for word in junk:
