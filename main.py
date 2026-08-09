@@ -347,13 +347,30 @@ async def start_handler(client, msg):
     if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
-            cap = f"📁 **{res.get('original_title', res['title'])}**\n\n⚠️ **5 min mein delete ho jayegi.**"
+            title = res.get('original_title', res.get('title', 'Movie'))
+            cap = f"📁 **{title}**\n\n⚠️ **Ye message 5 min mein delete ho jayega. Apne Saved Messages me forward kar lein!**"
             poster = res.get("poster") or res.get("poster_url")
+            
+            sent_msgs = []
+            
+            # 1. Compact Poster Photo Send Karega
             if poster:
-                sf = await client.send_photo(msg.chat.id, photo=poster, caption=cap)
-            else:
-                sf = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
-            asyncio.create_task(delete_after_delay([sf], 300))
+                try:
+                    p_msg = await client.send_photo(
+                        msg.chat.id, 
+                        photo=poster, 
+                        caption=f"🎬 **{title}**\n\nJOIN ❤️: @Movies2026Cinema"
+                    )
+                    sent_msgs.append(p_msg)
+                except Exception as e:
+                    pass
+            
+            # 2. Direct Video File Send Karega
+            sf = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
+            sent_msgs.append(sf)
+            
+            # 3. Auto Delete (5 Minutes)
+            asyncio.create_task(delete_after_delay(sent_msgs, 300))
 
     elif data.startswith("all_"):
         try:
