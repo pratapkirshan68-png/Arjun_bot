@@ -322,12 +322,12 @@ async def search_movie(client, msg):
         except: pass
         asyncio.create_task(delete_after_delay([res_msg], 300))
 
-  # ================= START HANDLER (PM) =================
+# ==================== START HANDLER (PM) ====================
 @app.on_message(filters.command("start") & filters.private)
 async def start_handler(client, msg):
     await client.users.update_one({"user_id": msg.from_user.id}, {"$set": {"user_id": msg.from_user.id}}, upsert=True)
     data = msg.command[1] if len(msg.command) > 1 else ""
-    
+
     try:
         await client.get_chat_member(FSUB_CHANNEL, msg.from_user.id)
     except UserNotParticipant:
@@ -340,9 +340,11 @@ async def start_handler(client, msg):
         btn = InlineKeyboardMarkup(buttons)
         return await msg.reply("❌ Pehle channel join karein!", reply_markup=btn)
     except: pass
-    
-    if not data: return await msg.reply("👋 Namaste! Group me search karein.")
-if data.startswith("file_"):
+
+    if not data:
+        return await msg.reply("👋 Namaste! Group me search karein.")
+
+    if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             cap = f"📁 **{res.get('original_title', res['title'])}**\n\n⚠️ **5 min mein delete ho jayegi.**"
@@ -353,7 +355,7 @@ if data.startswith("file_"):
                 sf = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
             asyncio.create_task(delete_after_delay([sf], 300))
 
-elif data.startswith("all_"):
+    elif data.startswith("all_"):
         try:
             b64_str = data.split("_", 1)[1]
             b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
@@ -377,11 +379,11 @@ elif data.startswith("all_"):
                     m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
                 sent_messages.append(m)
                 await asyncio.sleep(1.2)
-            except:
-                pass
+            except: pass
 
         await sts.edit("✅ **Batch Complete!**")
         asyncio.create_task(delete_after_delay(sent_messages + [sts], 300))
+        
 # ================= REQUESTS VIEWER COMMAND =================
 @app.on_message(filters.command("requests"))
 async def list_requests_cmd(client, msg):
