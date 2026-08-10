@@ -480,37 +480,33 @@ async def add_to_db(client, msg):
         except Exception as e:
             logger.error(f"TMDB Fetch Error: {e}")
 
-    # New Formatted Caption
-    caption_text = (
-        f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
-        f"📌 **TITLE :** {title_display}\n"
-        f"📅 **RELEASE DATE :** {rel_date}\n"
-        f"⭐ **RATING :** {rating} / 10\n"
-        f"📁 **FILE NAME :** {raw_caption}\n\n"
-        f"👇 **DOWNLOAD HERE** 👇\n"
-        f"Movie ka naam copy karke search group me likh dena he."
-    )
-
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔍 GET MOVIE HERE 🔍", url=group_link)]
-    ])
-
     # Send Post to Channel
     target_channel = FSUB_CHANNEL or "@Movies2026Cinema"
-    fallback_poster = "https://graph.org/file/f3721382414704c7df8b0.jpg"
-    final_poster = poster_url or fallback_poster
+    
+    async with aiohttp.ClientSession() as session:
+        img_bytes = None
+        if poster_url:
+            try:
+                async with session.get(poster_url) as resp:
+                    if resp.status == 200:
+                        img_bytes = await resp.read()
+            except Exception:
+                pass
 
-    try:
-        await client.send_photo(target_channel, photo=final_poster, caption=caption_text, reply_markup=buttons)
-        await status_msg.edit_text("✅ Database Updated & Channel Poster Posted!")
-    except Exception as e:
-        logger.error(f"Auto Poster Error: {e}")
         try:
-            # Agar TMDB URL Telegram fetch na kar paye toh fallback poster se bhej dega
-            await client.send_photo(target_channel, photo=fallback_poster, caption=caption_text, reply_markup=buttons)
-            await status_msg.edit_text("✅ Database Updated & Channel Poster Posted (Fallback)!")
-        except Exception as err:
-            await status_msg.edit_text(f"❌ Channel Post Error: `{err}`")
+            if img_bytes:
+                # Direct Bytes buffer se photo bhejega (URL ka issue 100% khatam)
+                photo_file = io.BytesIO(img_bytes)
+                photo_file.name = "poster.jpg"
+                await client.send_photo(target_channel, photo=photo_file, caption=caption_text, reply_markup=buttons)
+            else:
+                # Agar poster na mile toh text post
+                await client.send_message(target_channel, text=caption_text, reply_markup=buttons)
+            
+            await status_msg.edit_text("✅ Database Updated & Channel Poster Posted!")
+        except Exception as e:
+            logger.error(f"Auto Poster Error: {e}")
+            await status_msg.edit_text(f"❌ Channel Post Error: `{e}`")
         
     # NOTIFY REQUESTED USERS
     try:
