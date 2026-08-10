@@ -287,19 +287,20 @@ async def search_movie(client, msg):
             upsert=True
         )
         
-        admin_alert = (
-            f"📥 **NEW MOVIE REQUEST**\n\n"
-            f"🎬 **Requested Movie:** {msg.text}\n"
-            f"👤 **User:** [{user_name}](tg://user?id={user_id})\n"
-            f"🆔 **User ID:** `{user_id}`\n"
-            f"📌 **TMDB Title:** {tmdb_title} | **Date:** {tmdb_date}"
-        )
-        
-        for admin_id in ADMIN_IDS:
-            try:
-                await client.send_message(admin_id, admin_alert)
-            except Exception as e:
-                logger.error(f"Failed to send admin notification: {e}")
+        # Admin Alert (Safe Text)
+    admin_alert = (
+        f"📩 NEW MOVIE REQUEST\n\n"
+        f"🎬 Requested Movie: {msg.text}\n"
+        f"👤 User: {user_name}\n"
+        f"🆔 User ID: {user_id}\n"
+        f"📌 TMDB Title: {tmdb_title} | Date: {tmdb_date}"
+    )
+
+    for admin_id in ADMIN_IDS:
+        try:
+            await client.send_message(chat_id=int(admin_id), text=admin_alert)
+        except Exception as e:
+            logger.error(f"Failed to send admin notification to {admin_id}: {e}")
         
         if not is_admin:
             asyncio.create_task(delete_after_delay([req_msg, msg], 60))
