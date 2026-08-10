@@ -261,16 +261,17 @@ async def search_movie(client, msg):
         
         tmdb_title, tmdb_date = "N/A", "N/A"
         if TMDB_API_KEY:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(msg.text)}") as resp:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}") as resp:
+                    if resp.status == 200:
                         data = await resp.json()
                         if data.get("results"):
                             first_res = data["results"][0]
                             tmdb_title = first_res.get("title") or first_res.get("name") or "N/A"
                             tmdb_date = first_res.get("release_date") or first_res.get("first_air_date") or "N/A"
-            except Exception:
-                pass
+        except Exception:
+            pass
 
         await client.requests.update_one(
             {"user_id": user_id, "query": query},
