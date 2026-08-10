@@ -497,14 +497,13 @@ search_title = clean_name(clean_raw)
     ])
 
     # Send Post to Channel
-    target_channel = FSUB_CHANNEL or "@muviechenema"
-    try:
-        if poster_url:
-            await client.send_photo(target_channel, photo=poster_url, caption=caption_text, reply_markup=buttons)
+        target_channel = FSUB_CHANNEL or "@Movies2026Cinema"
+        final_poster = poster_url or "https://graph.org/file/f3721382414704c7df8b0.jpg"
+        
+        try:
+            await client.send_photo(target_channel, photo=final_poster, caption=caption_text, reply_markup=buttons)
             await status_msg.edit_text("✅ Database Updated & Channel Poster Posted!")
-        else:
-            await client.send_message(target_channel, text=caption_text, reply_markup=buttons)
-            await status_msg.edit_text("⚠️ Database Updated! (Text post sent).")
+        except Exception as e:
     except Exception as e:
         logger.error(f"Auto Poster Error: {e}")
         await status_msg.edit_text(f"❌ Channel Post Error: `{e}`")
