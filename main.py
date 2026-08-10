@@ -497,14 +497,20 @@ async def add_to_db(client, msg):
 
     # Send Post to Channel
     target_channel = FSUB_CHANNEL or "@Movies2026Cinema"
-    final_poster = poster_url or "https://graph.org/file/f3721382414704c7df8b0.jpg"
+    fallback_poster = "https://graph.org/file/f3721382414704c7df8b0.jpg"
+    final_poster = poster_url or fallback_poster
 
     try:
         await client.send_photo(target_channel, photo=final_poster, caption=caption_text, reply_markup=buttons)
         await status_msg.edit_text("✅ Database Updated & Channel Poster Posted!")
     except Exception as e:
         logger.error(f"Auto Poster Error: {e}")
-        await status_msg.edit_text(f"❌ Channel Post Error: `{e}`")
+        try:
+            # Agar TMDB URL Telegram fetch na kar paye toh fallback poster se bhej dega
+            await client.send_photo(target_channel, photo=fallback_poster, caption=caption_text, reply_markup=buttons)
+            await status_msg.edit_text("✅ Database Updated & Channel Poster Posted (Fallback)!")
+        except Exception as err:
+            await status_msg.edit_text(f"❌ Channel Post Error: `{err}`")
         
     # NOTIFY REQUESTED USERS
     try:
