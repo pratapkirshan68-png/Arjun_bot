@@ -428,7 +428,9 @@ async def add_to_db(client, msg):
         return
 
     raw_caption = msg.caption or file.file_name or "Unknown Movie"
-    search_title = clean_name(raw_caption)
+    # S01, 1080p, Combined jaise words ko TMDB search se pehle auto-remove karega
+clean_raw = re.sub(r'(?i)(S\d+|E\d+|\d+p|Hindi|Combined|Mkv|Web-DL|HDRip)', '', raw_caption)
+search_title = clean_name(clean_raw)
 
     # 1. DB Sync
     await client.movies.insert_one({
