@@ -1,6 +1,6 @@
 import os
+import io
 import re
-import asyncio
 import aiohttp
 import logging
 import base64
@@ -420,7 +420,7 @@ async def list_requests_cmd(client, msg):
     for chunk in chunks:
         await msg.reply(chunk, disable_web_page_preview=True)
 
-# ================= STORAGE UPLOAD & AUTO POSTER =================
+# ------------ STORAGE UPLOAD & AUTO POSTER ------------
 @app.on_message(filters.chat(STORAGE_CHANNEL) & (filters.video | filters.document | filters.forwarded))
 async def add_to_db(client, msg):
     file = msg.video or msg.document
@@ -480,6 +480,21 @@ async def add_to_db(client, msg):
         except Exception as e:
             logger.error(f"TMDB Fetch Error: {e}")
 
+    # New Formatted Caption
+    caption_text = (
+        f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
+        f"📌 **TITLE :** {title_display}\n"
+        f"📅 **RELEASE DATE :** {rel_date}\n"
+        f"⭐ **RATING :** {rating} / 10\n"
+        f"📁 **FILE NAME :** {raw_caption}\n\n"
+        f"👇 **DOWNLOAD HERE** 👇\n"
+        f"Movie ka naam copy karke search group me likh dena he."
+    )
+
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔍 GET MOVIE HERE 🔍", url=group_link)]
+    ])
+
     # Send Post to Channel
     target_channel = FSUB_CHANNEL or "@Movies2026Cinema"
     
@@ -495,19 +510,17 @@ async def add_to_db(client, msg):
 
         try:
             if img_bytes:
-                # Direct Bytes buffer se photo bhejega (URL ka issue 100% khatam)
                 photo_file = io.BytesIO(img_bytes)
                 photo_file.name = "poster.jpg"
                 await client.send_photo(target_channel, photo=photo_file, caption=caption_text, reply_markup=buttons)
             else:
-                # Agar poster na mile toh text post
                 await client.send_message(target_channel, text=caption_text, reply_markup=buttons)
             
             await status_msg.edit_text("✅ Database Updated & Channel Poster Posted!")
         except Exception as e:
             logger.error(f"Auto Poster Error: {e}")
             await status_msg.edit_text(f"❌ Channel Post Error: `{e}`")
-        
+
     # NOTIFY REQUESTED USERS
     try:
         all_requests = await client.requests.find({}).to_list(length=5000)
