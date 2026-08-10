@@ -483,7 +483,7 @@ async def add_to_db(client, msg):
                             rel_date = valid_item.get("release_date") or valid_item.get("first_air_date") or "N/A"
                             rating = valid_item.get("vote_average", "N/A")
                             p_path = valid_item.get("poster_path")
-                            poster_url = f"https://image.tmdb.org/t/p/w500{p_path}"
+                            poster_url = f"https://image.tmdb.org/t/p/w342{p_path}"
         except Exception as e:
             logger.error(f"TMDB Fetch Error: {e}")
             
