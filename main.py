@@ -456,7 +456,7 @@ async def add_to_db(client, msg):
         except Exception:
             group_link = MAIN_CHANNEL_LINK
 
-    # Fetch TMDB Details & Poster
+# Fetch TMDB Details & Poster (Movies + TV Shows Both Supported)
     poster_url = None
     rel_date = "N/A"
     rating = "N/A"
@@ -470,17 +470,23 @@ async def add_to_db(client, msg):
                     if resp.status == 200:
                         data = await resp.json()
                         results = data.get("results", [])
-                        if results:
-                            item = results[0]
-                            title_display = item.get("title") or item.get("name") or search_title
-                            rel_date = item.get("release_date") or item.get("first_air_date") or "N/A"
-                            rating = item.get("vote_average", "N/A")
-                            p_path = item.get("poster_path")
-                            if p_path:
-                                poster_url = f"https://image.tmdb.org/t/p/w500{p_path}"
+                        
+                        # Valid result with poster
+                        valid_item = None
+                        for res in results:
+                            if res.get("poster_path"):
+                                valid_item = res
+                                break
+                        
+                        if valid_item:
+                            title_display = valid_item.get("title") or valid_item.get("name") or search_title
+                            rel_date = valid_item.get("release_date") or valid_item.get("first_air_date") or "N/A"
+                            rating = valid_item.get("vote_average", "N/A")
+                            p_path = valid_item.get("poster_path")
+                            poster_url = f"https://image.tmdb.org/t/p/w500{p_path}"
         except Exception as e:
             logger.error(f"TMDB Fetch Error: {e}")
-
+            
     # New Formatted Caption
     caption_text = (
         f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
