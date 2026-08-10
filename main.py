@@ -428,9 +428,8 @@ async def add_to_db(client, msg):
         return
 
     raw_caption = msg.caption or file.file_name or "Unknown Movie"
-    # S01, 1080p, Combined jaise words ko TMDB search se pehle auto-remove karega
-clean_raw = re.sub(r'(?i)(S\d+|E\d+|\d+p|Hindi|Combined|Mkv|Web-DL|HDRip)', '', raw_caption)
-search_title = clean_name(clean_raw)
+    clean_raw = re.sub(r'(?i)(S\d+|E\d+|\d+p|Hindi|Combined|Mkv|Web-DL|HDRip)', '', raw_caption)
+    search_title = clean_name(clean_raw)
 
     # 1. DB Sync
     await client.movies.insert_one({
@@ -439,12 +438,12 @@ search_title = clean_name(clean_raw)
         "file_id": file.file_id
     })
 
-    status_msg = await msg.reply_text(f"✅ File DB me Add ho gayi!\nClean Name: `{search_title}`\n⏳ Checking Duplicate Poster...")
+    status_msg = await msg.reply_text(f"📁 File DB me Add ho gayi!\nClean Name: `{search_title}`\n⏳ Checking Duplicate Poster...")
 
-    # 2. Check Duplicate Poster (Agar iss movie ka poster pehle se post hai toh dobara nahi karega)
+    # 2. Check Duplicate Poster
     already_posted = await client.movies.count_documents({"title": search_title})
     if already_posted > 1:
-        await status_msg.edit_text(f"✅ File DB me Add ho gayi!\n⚠️ **Duplicate Poster Skipped:** `{search_title}` ka poster pehle se Channel par hai.")
+        await status_msg.edit_text(f"📁 File DB me Add ho gayi!\n⚠️ **Duplicate Poster Skipped:** `{search_title}` ka poster pehle se post hai.")
         return
 
     # Group Link Fetch
@@ -484,10 +483,10 @@ search_title = clean_name(clean_raw)
     # New Formatted Caption
     caption_text = (
         f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
-        f"📌 **TITLE :** `{title_display}`\n"
-        f"📅 **RELEASE DATE :** `{rel_date}`\n"
-        f"⭐ **RATING :** `{rating} / 10`\n"
-        f"📁 **FILE NAME :** `{raw_caption}`\n\n"
+        f"📌 **TITLE :** {title_display}\n"
+        f"📅 **RELEASE DATE :** {rel_date}\n"
+        f"⭐ **RATING :** {rating} / 10\n"
+        f"📁 **FILE NAME :** {raw_caption}\n\n"
         f"👇 **DOWNLOAD HERE** 👇\n"
         f"Movie ka naam copy karke search group me likh dena he."
     )
@@ -497,13 +496,12 @@ search_title = clean_name(clean_raw)
     ])
 
     # Send Post to Channel
-        target_channel = FSUB_CHANNEL or "@Movies2026Cinema"
-        final_poster = poster_url or "https://graph.org/file/f3721382414704c7df8b0.jpg"
-        
-        try:
-            await client.send_photo(target_channel, photo=final_poster, caption=caption_text, reply_markup=buttons)
-            await status_msg.edit_text("✅ Database Updated & Channel Poster Posted!")
-        except Exception as e:
+    target_channel = FSUB_CHANNEL or "@Movies2026Cinema"
+    final_poster = poster_url or "https://graph.org/file/f3721382414704c7df8b0.jpg"
+
+    try:
+        await client.send_photo(target_channel, photo=final_poster, caption=caption_text, reply_markup=buttons)
+        await status_msg.edit_text("✅ Database Updated & Channel Poster Posted!")
     except Exception as e:
         logger.error(f"Auto Poster Error: {e}")
         await status_msg.edit_text(f"❌ Channel Post Error: `{e}`")
