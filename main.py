@@ -260,7 +260,7 @@ async def search_movie(client, msg):
         user_id = msg.from_user.id if msg.from_user else 0
         
         tmdb_title, tmdb_date = "N/A", "N/A"
-        if TMDB_API_KEY:
+    if TMDB_API_KEY:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}") as resp:
