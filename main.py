@@ -232,6 +232,7 @@ sw = await client.send_message(msg.chat.id, "🔍 Searching...")
     except Exception as e:
         await sw.edit(f"⚠️ **Database Search Error:** `{e}`")
         logger.error(f"DB Search Failed: {e}")
+        return
     
         return
     if not results:
