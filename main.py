@@ -227,15 +227,14 @@ async def search_movie(client, msg):
     
 sw = await client.send_message(msg.chat.id, "🔍 Searching...")
 
-    try:
-        results = await smart_db_search(client, msg.text)
-    except Exception as e:
-        await sw.edit(f"⚠️ **Database Search Error:** `{e}`")
-        logger.error(f"DB Search Failed: {e}")
-        return
-    
-        return
-    if not results:
+try:
+    results = await smart_db_search(client, msg.text)
+except Exception as e:
+    await sw.edit(f"⚠️ **Database Error:** `{e}`")
+    logger.error(f"Search Failed: {e}")
+    return
+
+if not results:
         upcoming_info = await check_upcoming_movie(msg.text)
         if upcoming_info:
             text = (
