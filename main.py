@@ -306,26 +306,31 @@ async def search_movie(client, msg):
             asyncio.create_task(delete_after_delay([req_msg, msg], 60))
         return
 
-    poster = await get_poster(query)
-    markup = await get_search_buttons(query, results, offset=0)
-    text = f"🎬 **Results for:** `{msg.text}`\n\n⏳ _Ye result 5 minute mein delete ho jayega._"
-    
     try:
-        if poster:
-            res_msg = await client.send_photo(msg.chat.id, photo=poster, caption=text, reply_markup=markup)
-        else:
-            res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
-    except:
-        res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
+        poster = await get_poster(query)
+        markup = await get_search_buttons(query, results, offset=0)
+        text = f"🎬 **Results for:** `{msg.text}`\n\n⏳ _Ye result 5 minute mein delete ho jayega._"
         
-    await sm.delete()
-    
-    if not is_admin:
+        try:
+            if poster:
+                res_msg = await client.send_photo(msg.chat.id, photo=poster, caption=text, reply_markup=markup)
+            else:
+                res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
+        except Exception:
+            res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
+        
+        await sw.delete()
+        
+        if not is_admin:
             try:
                 await msg.delete()
             except Exception:
                 pass
             asyncio.create_task(delete_after_delay([res_msg], 300))
+            
+    except Exception as e:
+        await sw.edit(f"⚠️ **Code me yahan error hai Bhai:**\n`{e}`")
+        logger.error(f"Search Error: {e}")
         
 # ------------ START HANDLER (PM) ------------
 @app.on_message(filters.command("start") & filters.private)
