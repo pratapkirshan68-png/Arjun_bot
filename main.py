@@ -326,6 +326,7 @@ async def search_movie(client, msg):
             except Exception:
                 pass
             asyncio.create_task(delete_after_delay([res_msg], 300))
+        
 # ------------ START HANDLER (PM) ------------
 @app.on_message(filters.command("start") & filters.private)
 async def start_handler(client, msg):
