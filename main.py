@@ -223,68 +223,69 @@ async def delete_after_delay(msgs, delay):
 async def search_movie(client, msg):
     is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
     query = clean_name(msg.text)
-    if len(query) < 2: return
-    
-sw = await client.send_message(msg.chat.id, "🔍 Searching...")
+    if len(query) < 2: 
+        return
 
-try:
-    results = await smart_db_search(client, msg.text)
-except Exception as e:
-    await sw.edit(f"⚠️ **Database Error:** `{e}`")
-    logger.error(f"Search Failed: {e}")
-    return
+    sw = await client.send_message(msg.chat.id, "🔍 Searching...")
 
-if not results:
+    try:
+        results = await smart_db_search(client, msg.text)
+    except Exception as e:
+        await sw.edit(f"⚠️ **Database Error:** `{e}`")
+        logger.error(f"Search Failed: {e}")
+        return
+
+    if not results:
         upcoming_info = await check_upcoming_movie(msg.text)
         if upcoming_info:
             text = (
                 f"🎬 **Movie:** `{upcoming_info['title']}`\n"
                 f"📅 **Release Date:** `{upcoming_info['release_date']}`\n"
                 f"📌 **Status:** Upcoming\n"
-                f"⏳ **Days Remaining:** `{upcoming_info['days_left']} Days`\n\n"
+                f"⏳ **Days Remaining:** `{upcoming_info['days_remaining']}` Days\n"
                 f"ℹ️ _Ye movie release hote hi humare database me add kar di jayegi!_"
             )
-            await sm.delete()
+            await sw.delete()
             if upcoming_info['poster']:
                 res_msg = await client.send_photo(msg.chat.id, photo=upcoming_info['poster'], caption=text)
             else:
-                res_msg = await client.send_message(msg.chat.id, text)
+                res_msg = await client.send_message(msg.chat.id, text=text)
             
             if not is_admin:
-                asyncio.create_task(delete_after_delay([res_msg, msg], 300))
+                asyncio.create_task(delete_after_delay([res_msg], 300))
             return
 
-        await sm.delete()
+        await sw.delete()
         req_msg = await client.send_message(
-            msg.chat.id, 
+            msg.chat.id,
             "Maaf kijiye, ye movie abhi hamare database me available nahi hai.\n\n"
-            "Hamne aapki request admin ko bhej di hai.\n\n"
+            "Humne aapki request admin ko bhej di hai.\n"
             "Jaise hi movie database me add hogi, aapko automatically private message mil jayega."
         )
-        
+
         user_name = msg.from_user.first_name if msg.from_user else "Unknown User"
         user_id = msg.from_user.id if msg.from_user else 0
-        
+
         tmdb_title, tmdb_date = "N/A", "N/A"
-    if TMDB_API_KEY:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("results"):
-                            first_res = data["results"][0]
-                            tmdb_title = first_res.get("title") or first_res.get("name") or "N/A"
-                            tmdb_date = first_res.get("release_date") or first_res.get("first_air_date") or "N/A"
-        except Exception:
-            pass
+        if TMDB_API_KEY:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}") as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if data.get("results"):
+                                first_res = data["results"][0]
+                                tmdb_title = first_res.get("title") or first_res.get("name") or "N/A"
+                                tmdb_date = first_res.get("release_date") or first_res.get("first_air_date") or "N/A"
+            except Exception:
+                pass
 
         await client.requests.update_one(
             {"user_id": user_id, "query": query},
             {"$set": {
-                "user_id": user_id, 
-                "user_name": user_name, 
-                "query": query, 
+                "user_id": user_id,
+                "user_name": user_name,
+                "query": query,
                 "raw_query": msg.text,
                 "tmdb_title": tmdb_title,
                 "tmdb_date": tmdb_date,
@@ -292,22 +293,21 @@ if not results:
             }},
             upsert=True
         )
-        
-        # Admin Alert (Safe Text)
-    admin_alert = (
-        f"📩 NEW MOVIE REQUEST\n\n"
-        f"🎬 Requested Movie: {msg.text}\n"
-        f"👤 User: {user_name}\n"
-        f"🆔 User ID: {user_id}\n"
-        f"📌 TMDB Title: {tmdb_title} | Date: {tmdb_date}"
-    )
 
-    for admin_id in ADMIN_IDS:
-        try:
-            await client.send_message(chat_id=int(admin_id), text=admin_alert)
-        except Exception as e:
-            logger.error(f"Failed to send admin notification to {admin_id}: {e}")
-        
+        admin_alert = (
+            f"📥 **NEW MOVIE REQUEST**\n\n"
+            f"🎬 **Requested Movie:** `{msg.text}`\n"
+            f"👤 **User:** `{user_name}`\n"
+            f"🆔 **User ID:** `{user_id}`\n"
+            f"📌 **TMDB Title:** `{tmdb_title}` | **Date:** `{tmdb_date}`"
+        )
+
+        for admin_id in ADMIN_IDS:
+            try:
+                await client.send_message(chat_id=int(admin_id), text=admin_alert)
+            except Exception as e:
+                logger.error(f"Failed to send admin notification to {admin_id}: {e}")
+
         if not is_admin:
             asyncio.create_task(delete_after_delay([req_msg, msg], 60))
         return
