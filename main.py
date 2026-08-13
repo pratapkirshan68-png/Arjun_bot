@@ -231,7 +231,8 @@ USER_LAST_SEARCH = {}
 async def check_upcoming_movie(query):
     if not TMDB_API_KEY:
         return None
-# Extra words (hindi, dubbed, full, movie) hata kar saaf search karega
+
+    # Extra words (hindi, dubbed, full, movie) hata kar saaf search karega
     clean_q = re.sub(r'(?i)\b(hindi|dubbed|english|tamil|telugu|full|movie|720p|1080p|480p)\b', '', query).strip()
     if not clean_q:
         clean_q = query
@@ -247,12 +248,12 @@ async def check_upcoming_movie(query):
                     results = data.get("results", [])
                     if not results:
                         return None
-                    
+
                     movie = results[0]
                     title = movie.get("title") or movie.get("original_title") or query
                     rel_date_str = movie.get("release_date", "")
                     poster_path = movie.get("poster_path")
-                    
+
                     days_remaining = "N/A"
                     if rel_date_str:
                         try:
@@ -263,18 +264,15 @@ async def check_upcoming_movie(query):
                             pass
 
                     poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
-                    
+
                     return {
                         "title": title,
                         "release_date": rel_date_str,
                         "days_remaining": days_remaining,
                         "poster": poster_url
                     }
-    except Exception as e:
-        logger.error(f"TMDB Fetch Error: {e}")
+    except Exception:
         return None
-    return None
-
 
 # 2. Main Search Handler
 @app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "delall", "del", "shortlink", "broadcast", "sms", "requests", "delreq", "clearreq"]))
