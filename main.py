@@ -346,17 +346,18 @@ async def search_movie(client, msg):
             logger.error(f"Search Final Error: {e}")
         return
 
-    # 1. Non-blocking Async TMDB Upcoming Check (Only Future Releases)
+   # 1. Non-blocking Async TMDB Upcoming Check
 async def check_upcoming_movie(query):
     if not TMDB_API_KEY:
         return None
 
-    clean_q = re.sub(r'(?i)\b(hindi|dubbed|english|tamil|telugu|full|movie|720p|1080p|480p)\b', '', query).strip()
-    if not clean_q:
-        clean_q = query
-
-    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
     try:
+        clean_q = re.sub(r'(?i)\b(hindi|dubbed|english|tamil|telugu|full|movie|720p|1080p|480p)\b', '', query).strip()
+        if not clean_q:
+            clean_q = query
+
+        url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
+        
         timeout = aiohttp.ClientTimeout(total=3.0)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as resp:
@@ -366,35 +367,32 @@ async def check_upcoming_movie(query):
                     if not results:
                         return None
 
-                    movie = results[0]
-                    rel_date_str = movie.get("release_date", "")
+                    # Future release date wali movie dhoondo
+                    for movie in results:
+                        rel_date_str = movie.get("release_date", "")
+                        if rel_date_str:
+                            try:
+                                rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d")
+                                today = datetime.now()
+                                days_remaining = (rel_date - today).days
 
-                    if rel_date_str:
-                        try:
-                            rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d")
-                            today = datetime.now()
-                            days_remaining = (rel_date - today).days
+                                if days_remaining > 0:
+                                    title = movie.get("title") or movie.get("original_title") or query
+                                    poster_path = movie.get("poster_path")
+                                    poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
 
-                            # 🔴 Sahi Fix: Agar movie already release ho chuki hai (days <= 0), toh None return karo
-                            if days_remaining <= 0:
-                                return None
-
-                            title = movie.get("title") or movie.get("original_title") or query
-                            poster_path = movie.get("poster_path")
-                            poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
-
-                            return {
-                                "title": title,
-                                "release_date": rel_date_str,
-                                "days_remaining": days_remaining,
-                                "poster": poster_url
-                            }
-                        except Exception:
-                            return None
+                                    return {
+                                        "title": title,
+                                        "release_date": rel_date_str,
+                                        "days_remaining": days_remaining,
+                                        "poster": poster_url
+                                    }
+                            except Exception:
+                                continue
     except Exception:
         return None
     return None
-
+    
     # 1. Admin ke liye Request DataBase me save karo
     try:
         await client.requests.update_one(
