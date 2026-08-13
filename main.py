@@ -473,11 +473,17 @@ async def start_handler(client, msg):
         except Exception:
             pass
 
-    # Normal /start Message (Jab user Bina link ke /start bhejta hai)
+   # Normal /start Message (Jab user Bina link ke /start bhejta hai)
     if len(msg.command) < 2:
+        btn = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔍 Join Search Channel (Movie Search Karein)", url=MAIN_CHANNEL_LINK)]
+        ])
         await msg.reply_text(
             f"👋 **Namaste {msg.from_user.first_name}!**\n\n"
-            f"Main Search Bot hu. Aap Group me movie search karke yahan direct file le sakte hain!"
+            f"Main Search Bot hu 🍿\n\n"
+            f"Aap hamare **Search Channel** par jaakar kisi bhi movie ka naam likh kar search karein, aur file direct yahan PM me paayein!\n\n"
+            f"👇 Niche button par click karke channel join karein:",
+            reply_markup=btn
         )
         return
 
