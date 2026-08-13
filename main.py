@@ -521,14 +521,9 @@ async def add_to_db(client, msg):
     if SEARCH_CHAT and SEARCH_CHAT != 0:
         try:
             search_group = await client.get_chat(SEARCH_CHAT)
-            group_link = search_group.invite_link or (f"https://t.me/{search_group.username}" if search_group.userna        r'aac', r'dd5', r'lol', r'ms', r'join' ]
-
-    for word in junk:
-        text = re.sub(word, '', text, flags=re.IGNORECASE)
-
-    # Special characters clean & extra spaces remove
-    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
-    return " ".join(text.split()).strip()
+            group_link = search_group.invite_link or (f"https://t.me/{search_group.username}" if search_group.username else MAIN_CHANNEL_LINK)
+        except Exception:
+            pass
     
 async def get_poster(query):
     clean_q = clean_name(query)
