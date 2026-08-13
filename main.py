@@ -356,8 +356,23 @@ async def check_upcoming_movie(query):
         if not clean_q:
             clean_q = query
 
-        url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
-        
+# ================= AUTO-FILTER SEARCH (GROUP) =================
+import aiohttp
+import re
+from urllib.parse import quote
+
+# 1. Non-blocking Async TMDB Upcoming Check
+async def check_upcoming_movie(query):
+    if not TMDB_API_KEY:
+        return None
+# Extra words (hindi, dubbed, full, movie) hata kar saaf search karega
+    clean_q = re.sub(r'(?i)\b(hindi|dubbed|english|tamil|telugu|full|movie|720p|1080p|480p)\b', '', query).strip()
+    if not clean_q:
+        clean_q = query
+
+    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
+    try:
+        # Strict 3-second network timeout
         timeout = aiohttp.ClientTimeout(total=3.0)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as resp:
@@ -366,35 +381,104 @@ async def check_upcoming_movie(query):
                     results = data.get("results", [])
                     if not results:
                         return None
+                    
+                    movie = results[0]
+                    title = movie.get("title") or movie.get("original_title") or query
+                    rel_date_str = movie.get("release_date", "")
+                    poster_path = movie.get("poster_path")
+                    
+                    days_remaining = "N/A"
+                    if rel_date_str:
+                        try:
+                            rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d")
+                            today = datetime.now()
+                            days_remaining = max(0, (rel_date - today).days)
+                        except Exception:
+                            pass
 
-                    # Future release date wali movie dhoondo
-                    for movie in results:
-                        rel_date_str = movie.get("release_date", "")
-                        if rel_date_str:
-                            try:
-                                rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d")
-                                today = datetime.now()
-                                days_remaining = (rel_date - today).days
-
-                                if days_remaining > 0:
-                                    title = movie.get("title") or movie.get("original_title") or query
-                                    poster_path = movie.get("poster_path")
-                                    poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
-
-                                    return {
-                                        "title": title,
-                                        "release_date": rel_date_str,
-                                        "days_remaining": days_remaining,
-                                        "poster": poster_url
-                                    }
-                            except Exception:
-                                continue
-    except Exception:
+                    poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+                    
+                    return {
+                        "title": title,
+                        "release_date": rel_date_str,
+                        "days_remaining": days_remaining,
+                        "poster": poster_url
+                    }
+    except Exception as e:
+        logger.error(f"TMDB Fetch Error: {e}")
         return None
     return None
-    
-    # 1. Admin ke liye Request DataBase me save karo
+
+
+# 2. Main Search Handler
+@app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "delall", "del", "shortlink", "broadcast", "sms", "requests", "delreq", "clearreq"]))
+async def search_movie(client, msg):
+    is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
+    query = clean_name(msg.text)
+    if len(query) < 2: 
+        return
+
+    sw = await client.send_message(msg.chat.id, "🔍 Searching...")
+
+    def format_date(d_str):
+        if not d_str or d_str == "N/A":
+            return "N/A"
+        try:
+            return datetime.strptime(d_str.strip(), "%Y-%m-%d").strftime("%d-%m-%Y")
+        except Exception:
+            return d_str
+
+    results = []
+    # Force DB search to timeout safely in 3 seconds max
     try:
+        results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=3.0)
+    except Exception:
+        results = []
+
+    # Agar DB me movie NAI MILI
+    if not results:
+        # TMDB se Upcoming check karo
+        upcoming_info = await check_upcoming_movie(query)
+
+        if upcoming_info:
+            up_date = format_date(upcoming_info.get('release_date', 'N/A'))
+            text = (
+                f"🎬 **Movie:** `{upcoming_info['title']}`\n"
+                f"📅 **Release Date:** `{up_date}`\n"
+                f"📌 **Status:** Upcoming\n"
+                f"⏳ **Days Remaining:** `{upcoming_info['days_remaining']}` Days\n"
+                f"ℹ️ _Ye movie release hote hi humare database me add kar di jayegi!_"
+            )
+            try:
+                await sw.delete()
+            except Exception:
+                pass
+
+            if upcoming_info.get('poster'):
+                res_msg = await client.send_photo(msg.chat.id, photo=upcoming_info['poster'], caption=text)
+            else:
+                res_msg = await client.send_message(msg.chat.id, text=text)
+            
+            if not is_admin:
+                asyncio.create_task(delete_after_delay([res_msg], 300))
+            return
+
+        # Agar Upcoming bhi nai hai toh request save karo
+        try:
+            await sw.delete()
+        except Exception:
+            pass
+
+        req_msg = await client.send_message(
+            msg.chat.id,
+            "Maaf kijiye, ye movie abhi hamare database me available nahi hai.\n\n"
+            "Humne aapki request admin ko bhej di hai.\n"
+            "Jaise hi movie database me add hogi, aapko automatically private message mil jayega."
+        )
+
+        user_name = msg.from_user.first_name if msg.from_user else "Unknown User"
+        user_id = msg.from_user.id if msg.from_user else 0
+
         await client.requests.update_one(
             {"user_id": user_id, "query": query},
             {"$set": {
@@ -406,35 +490,36 @@ async def check_upcoming_movie(query):
             }},
             upsert=True
         )
+
+        if not is_admin:
+            asyncio.create_task(delete_after_delay([req_msg, msg], 60))
+        return
+
+    # Agar DB me MIL GAYI
+    try:
+        poster = await get_poster(query)
+        markup = await get_search_buttons(query, results, offset=0)
+        text = f"🎬 **Results for:** `{msg.text}`\n\n⏳ _Ye result 5 minute mein delete ho jayega._"
+        
+        if poster:
+            res_msg = await client.send_photo(msg.chat.id, photo=poster, caption=text, reply_markup=markup)
+        else:
+            res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
+        
+        try:
+            await sw.delete()
+        except Exception:
+            pass
+        
+        if not is_admin:
+            try:
+                await msg.delete()
+            except Exception:
+                pass
+            asyncio.create_task(delete_after_delay([res_msg], 300))
+            
     except Exception as e:
-        logger.error(f"Request Save Error: {e}")
-
-    # 2. User Message & Google Link Button
-    google_search_url = f"https://www.google.com/search?q={quote(query + ' movie release date imdb')}"
-
-    wrong_msg_text = (
-        f"📝 **Aapki Request Save Ho Gayi Hai!**\n\n"
-        f"👤 **Name:** {user_name}\n"
-        f"🆔 **User ID:** `{user_id}`\n"
-        f"🔍 **Search Query:** `{msg.text}`\n\n"
-        f"⚠️ **Ye movie abhi hamare database me nahi hai.** Humne aapki request Admin ko bhej di hai!\n\n"
-        f"💡 **Spelling Check Karein:**\n"
-        f"Agar aapne spelling galat likhi hai toh niche button par tap karke Google/IMDb par **sahi naam copy** karke dobara search karein!"
-    )
-
-    btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔍 Google/IMDb Par Sahi Naam Dhoondein", url=google_search_url)]
-    ])
-
-    req_msg = await client.send_message(
-        msg.chat.id,
-        text=wrong_msg_text,
-        reply_markup=btn
-    )
-
-    if not is_admin:
-        asyncio.create_task(delete_after_delay([req_msg], 120))
-    return
+        logger.error(f"Search Final Error: {e}")
         
 # ================= START HANDLER (PM) =================
 
