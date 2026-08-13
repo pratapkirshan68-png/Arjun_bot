@@ -351,56 +351,14 @@ async def search_movie(client, msg):
             asyncio.create_task(delete_after_delay([res_msg], 300))
         return
 
-    # ❌ Agar Movie Kahin Nahi Mili
+   # ❌ Agar Movie Kahin Nahi Mili (Request Save + Google Link)
     try:
         await sw.delete()
     except Exception:
         pass
 
-    google_search_url = f"https://www.google.com/search?q={quote(query + ' movie release date imdb')}"
-
-    wrong_msg_text = (
-        f"❌ **Naam Ko Check Karein!**\n\n"
-        f"👤 **Name:** {user_name}\n"
-        f"🆔 **User ID:** `{user_id}`\n"
-        f"🔍 **Aapne Search Kiya:** `{msg.text}`\n\n"
-        f"⚠️ **Aapne jo naam daala hai wo galat hai ya movie abhi available nahi hai.**\n\n"
-        f"💡 **Kya Karein?**\n"
-        f"1️⃣ Niche diye gaye button par tap karke Google/IMDb par **sahi naam** check karein.\n"
-        f"2️⃣ Sahi naam aur year ko wahan se **copy** karein.\n"
-        f"3️⃣ Yahan aakar dobara search karein!"
-    )
-
-    btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔍 Google/IMDb Par Sahi Naam Dhoondein", url=google_search_url)]
-    ])
-
-     req_msg = await client.send_message(
-        msg.chat.id,
-        text=wrong_msg_text,
-        reply_markup=btn
-    )
-
-    if not is_admin:
-        asyncio.create_task(delete_after_delay([req_msg], 120))
-    return
-
-        # Agar Upcoming bhi nai hai toh request save karo
-        try:
-            await sw.delete()
-        except Exception:
-            pass
-
-        req_msg = await client.send_message(
-            msg.chat.id,
-            "Maaf kijiye, ye movie abhi hamare database me available nahi hai.\n\n"
-            "Humne aapki request admin ko bhej di hai.\n"
-            "Jaise hi movie database me add hogi, aapko automatically private message mil jayega."
-        )
-
-        user_name = msg.from_user.first_name if msg.from_user else "Unknown User"
-        user_id = msg.from_user.id if msg.from_user else 0
-
+    # 1. Request ko Database me save karo (taaki Admin ko pata rahe)
+    try:
         await client.requests.update_one(
             {"user_id": user_id, "query": query},
             {"$set": {
@@ -412,10 +370,35 @@ async def search_movie(client, msg):
             }},
             upsert=True
         )
+    except Exception as e:
+        logger.error(f"Request Save Error: {e}")
 
-        if not is_admin:
-            asyncio.create_task(delete_after_delay([req_msg, msg], 60))
-        return
+    # 2. User ko Google Search Link aur Message bhej-o
+    google_search_url = f"https://www.google.com/search?q={quote(query + ' movie release date imdb')}"
+
+    wrong_msg_text = (
+        f"📝 **Aapki Request Save Ho Gayi Hai!**\n\n"
+        f"👤 **Name:** {user_name}\n"
+        f"🆔 **User ID:** `{user_id}`\n"
+        f"🔍 **Search Query:** `{msg.text}`\n\n"
+        f"⚠️ **Ye movie abhi hamare database me nahi hai.** Humne aapki request Admin ko bhej di hai! Jaise hi add hogi aapko message mil jayega.\n\n"
+        f"💡 **Spelling Check Karein:**\n"
+        f"Agar aapne spelling galat likhi hai toh niche button par click karke Google/IMDb par **sahi naam copy** karke dobara search karein!"
+    )
+
+    btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔍 Google/IMDb Par Sahi Naam Dhoondein", url=google_search_url)]
+    ])
+
+    req_msg = await client.send_message(
+        msg.chat.id,
+        text=wrong_msg_text,
+        reply_markup=btn
+    )
+
+    if not is_admin:
+        asyncio.create_task(delete_after_delay([req_msg], 120))
+    return
 
     # Agar DB me MIL GAYI
     try:
