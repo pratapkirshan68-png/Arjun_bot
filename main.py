@@ -295,7 +295,7 @@ async def search_movie(client, msg):
     # Agar DB me movie NAI MILI
     if not results:
         # TMDB se Upcoming check karo
-        upcoming_info = await check_upcoming_movie(msg.text)
+        upcoming_info = await check_upcoming_movie(query)
 
         if upcoming_info:
             up_date = format_date(upcoming_info.get('release_date', 'N/A'))
