@@ -228,12 +228,6 @@ async def search_movie(client, msg):
 
     sw = await client.send_message(msg.chat.id, "🔍 Searching...")
 
-    try:
-        results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=5.0)
-    except Exception as e:
-        logger.error(f"DB Search Timeout: {e}")
-        results = []
-
     def format_date(d_str):
         if not d_str or d_str == "N/A":
             return "N/A"
@@ -242,13 +236,23 @@ async def search_movie(client, msg):
         except Exception:
             return d_str
 
+    results = []
+    try:
+        # DB Search timeout with shield
+        results = await asyncio.wait_for(asyncio.shield(smart_db_search(client, msg.text)), timeout=3.0)
+    except Exception:
+        results = []
+
+    # Agar DB me nahi mili, toh Turant Upcoming Movie check karega
     if not results:
         upcoming_info = None
         try:
-            upcoming_info = await asyncio.wait_for(check_upcoming_movie(msg.text), timeout=5.0)
+            if 'check_upcoming_movie' in globals():
+                upcoming_info = await asyncio.wait_for(check_upcoming_movie(msg.text), timeout=4.0)
         except Exception as e:
-            logger.error(f"Upcoming Check Timeout: {e}")
+            logger.error(f"Upcoming Check Error: {e}")
 
+        # Agar Upcoming Movie ki detail mili
         if upcoming_info:
             up_date = format_date(upcoming_info.get('release_date', 'N/A'))
             text = (
@@ -258,8 +262,12 @@ async def search_movie(client, msg):
                 f"⏳ **Days Remaining:** `{upcoming_info['days_remaining']}` Days\n"
                 f"ℹ️ _Ye movie release hote hi humare database me add kar di jayegi!_"
             )
-            await sw.delete()
-            if upcoming_info['poster']:
+            try:
+                await sw.delete()
+            except Exception:
+                pass
+
+            if upcoming_info.get('poster'):
                 res_msg = await client.send_photo(msg.chat.id, photo=upcoming_info['poster'], caption=text)
             else:
                 res_msg = await client.send_message(msg.chat.id, text=text)
@@ -268,7 +276,12 @@ async def search_movie(client, msg):
                 asyncio.create_task(delete_after_delay([res_msg], 300))
             return
 
-        await sw.delete()
+        # Agar Upcoming bhi nahi mili toh Request Save karega
+        try:
+            await sw.delete()
+        except Exception:
+            pass
+
         req_msg = await client.send_message(
             msg.chat.id,
             "Maaf kijiye, ye movie abhi hamare database me available nahi hai.\n\n"
@@ -283,7 +296,7 @@ async def search_movie(client, msg):
         if TMDB_API_KEY:
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}", timeout=5.0) as resp:
+                    async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}", timeout=4.0) as resp:
                         if resp.status == 200:
                             data = await resp.json()
                             if data.get("results"):
@@ -320,12 +333,13 @@ async def search_movie(client, msg):
             try:
                 await client.send_message(chat_id=int(admin_id), text=admin_alert)
             except Exception as e:
-                logger.error(f"Failed to send admin notification to {admin_id}: {e}")
+                logger.error(f"Failed to send admin notification: {e}")
 
         if not is_admin:
             asyncio.create_task(delete_after_delay([req_msg, msg], 60))
         return
 
+    # Agar DB me mil gayi toh buttons aur results bhejega
     try:
         poster = await get_poster(query)
         markup = await get_search_buttons(query, results, offset=0)
@@ -339,7 +353,10 @@ async def search_movie(client, msg):
         except Exception:
             res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
         
-        await sw.delete()
+        try:
+            await sw.delete()
+        except Exception:
+            pass
         
         if not is_admin:
             try:
@@ -349,8 +366,7 @@ async def search_movie(client, msg):
             asyncio.create_task(delete_after_delay([res_msg], 300))
             
     except Exception as e:
-        await sw.edit(f"⚠️ **Code me yahan error hai Bhai:**\n`{e}`")
-        logger.error(f"Search Error: {e}")
+        logger.error(f"Search Final Error: {e}")
         
 # ------------ START HANDLER (PM) ------------
 
