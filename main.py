@@ -438,115 +438,79 @@ async def check_upcoming_movie(query):
         asyncio.create_task(delete_after_delay([req_msg], 120))
     return
         
-# ----------- START HANDLER (PM ME FILE BHEJNE KE LIYE) -----------
+# ================= START HANDLER (PM) =================
+
 @app.on_message(filters.command("start") & filters.private)
 async def start_handler(client, msg):
-    user_id = msg.from_user.id
+    data = msg.command[1] if len(msg.command) > 1 else ""
 
-    # User ko Database me Save Karo
+    # FSUB Check
     try:
-        await client.users.update_one({"user_id": user_id}, {"$set": {"user_id": user_id}}, upsert=True)
-    except Exception:
+        await client.get_chat_member(FSUB_CHANNEL, msg.from_user.id)
+    except UserNotParticipant:
+        invite = (await client.get_chat(FSUB_CHANNEL)).invite_link or MAIN_CHANNEL_LINK
+        me = await client.get_me()
+        buttons = [[InlineKeyboardButton("📢 JOIN CHANNEL 📢", url=invite)]]
+        if data:
+            try_again_link = f"https://t.me/{me.username}?start={data}"
+            buttons.append([InlineKeyboardButton("🔄 TRY AGAIN / VERIFY 🔄", url=try_again_link)])
+        btn = InlineKeyboardMarkup(buttons)
+        return await msg.reply("❌ Pehle channel join karein!", reply_markup=btn)
+    except:
         pass
 
-    # 📢 Force Sub Check (Channel Join System)
-    if FSUB_CHANNEL:
+    if not data:
+        return await msg.reply("👋 Namaste! Group me search karein.")
+
+    if data.startswith("file_"):
+        res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
+        if res:
+            cap = f"📂 `{res.get('original_title', res['title'])}`\n\n⚠️ **5 min mein delete ho jayegi.**"
+            sf = await client.send_cached_media(
+                msg.chat.id,
+                res["file_id"],
+                caption=cap
+            )
+            asyncio.create_task(delete_after_delay([sf], 300))
+
+    elif data.startswith("all_"):
         try:
-            await client.get_chat_member(FSUB_CHANNEL, user_id)
-        except UserNotParticipant:
+            b64_str = data.split("_", 1)[1]
+            b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
+            search_q = base64.urlsafe_b64decode(b64_str).decode()
+        except:
+            search_q = unquote(data.split("_", 1)[1])
+
+        cursor = client.movies.find({"title": {"$regex": search_q, "$options": "i"}})
+        results = await cursor.to_list(length=100)
+
+        if not results:
+            words = search_q.split()
+            if words:
+                keyword = max(words, key=len)
+                cursor = client.movies.find({"title": {"$regex": keyword, "$options": "i"}})
+                results = await cursor.to_list(length=100)
+
+        if not results:
+            return await msg.reply("❌ Files nahi mili!")
+
+        sts = await msg.reply(f"🚀 **Found {len(results)} files. Sending...**")
+        sent_messages = []
+
+        for res in results:
             try:
-                chat = await client.get_chat(FSUB_CHANNEL)
-                invite_link = chat.invite_link or MAIN_CHANNEL_LINK
-            except Exception:
-                invite_link = MAIN_CHANNEL_LINK
-            
-            param = msg.command[1] if len(msg.command) > 1 else ""
-            btn = [[InlineKeyboardButton("📢 Main Channel Join Karein", url=invite_link)]]
-            if param:
-                btn.append([InlineKeyboardButton("🔄 Try Again (File Lene Ke Liye)", url=f"https://t.me/{(await client.get_me()).username}?start={param}")])
-            
-            await msg.reply_text(
-                "⚠️ **Access Denied!**\n\nFile lene ke liye pehle hamare main channel ko join karein.",
-                reply_markup=InlineKeyboardMarkup(btn)
-            )
-            return
-        except Exception:
-            pass
+                m = await client.send_cached_media(
+                    msg.chat.id,
+                    res["file_id"],
+                    caption=f"📂 `{res.get('original_title', res['title'])}`\n\n⚠️ **5 min mein delete ho jayegi.**"
+                )
+                sent_messages.append(m)
+                await asyncio.sleep(1.2)
+            except:
+                pass
 
-   # Normal /start Message (Jab user Bina link ke /start bhejta hai)
-    if len(msg.command) < 2:
-        btn = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔍 Join Search Channel (Movie Search Karein)", url=MAIN_CHANNEL_LINK)]
-        ])
-        await msg.reply_text(
-            f"👋 **Namaste {msg.from_user.first_name}!**\n\n"
-            f"Main Search Bot hu 🍿\n\n"
-            f"Aap hamare **Search Channel** par jaakar kisi bhi movie ka naam likh kar search karein, aur file direct yahan PM me paayein!\n\n"
-            f"👇 Niche button par click karke channel join karein:",
-            reply_markup=btn
-        )
-        return
-
-    # 📁 Jab User Group ke Button par click karke PM me aayega:
-    data = msg.command[1]
-    
-    try:
-        # File ID parse karke Storage Channel se Direct Message Copy Karega
-        file_msg_id = None
-        if data.startswith("file_"):
-            file_msg_id = int(data.replace("file_", ""))
-        elif data.isdigit():
-            file_msg_id = int(data)
-
-        if file_msg_id:
-            sent_file = await client.copy_message(
-                chat_id=msg.chat.id,
-                from_chat_id=STORAGE_CHANNEL,
-                message_id=file_msg_id
-            )
-            # 10 minute me PM wali file auto-delete ho jayegi (Safety ke liye)
-            asyncio.create_task(delete_after_delay([sent_file], 600))
-        else:
-            await msg.reply_text("❌ **File Not Found! Pehle group me dobara search karein.**")
-            
-    except Exception as e:
-        await msg.reply_text("❌ **File bhejne me error aaya! Kripya Storage Channel Settings Check Karein.**")
-        
-# ================= REQUESTS VIEWER COMMAND =================
-@app.on_message(filters.command("requests"))
-async def list_requests_cmd(client, msg):
-    if msg.from_user and msg.from_user.id not in ADMIN_IDS:
-        return await msg.reply("❌ Aap admin nahi hain!")
-        
-    reqs = await client.requests.find({}).to_list(length=500)
-    if not reqs:
-        return await msg.reply("✅ Koi pending requests nahi hain!")
-        
-    header = f"📥 **TOTAL PENDING REQUESTS ({len(reqs)}):**\n\n"
-    chunks = []
-    current_chunk = header
-
-    for idx, r in enumerate(reqs, 1):
-        u_name = r.get("user_name", "User")
-        u_id = r.get("user_id", "N/A")
-        movie = r.get("raw_query", r.get("query", "Unknown"))
-        
-        entry = (
-            f"**{idx}.** 🎬 `{movie}`\n"
-            f"   👤 [{u_name}](tg://user?id={u_id}) (`{u_id}`)\n\n"
-        )
-        
-        if len(current_chunk) + len(entry) > 3800:
-            chunks.append(current_chunk)
-            current_chunk = entry
-        else:
-            current_chunk += entry
-
-    if current_chunk:
-        chunks.append(current_chunk)
-
-    for chunk in chunks:
-        await msg.reply(chunk, disable_web_page_preview=True)
+        await sts.edit("✅ **Batch Complete!**")
+        asyncio.create_task(delete_after_delay(sent_messages + [sts], 300))
 
 # ------------ STORAGE UPLOAD & AUTO POSTER ------------
 @app.on_message(filters.chat(STORAGE_CHANNEL) & (filters.video | filters.document | filters.forwarded))
