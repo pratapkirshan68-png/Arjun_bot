@@ -283,7 +283,7 @@ async def search_movie(client, msg):
     user_name = msg.from_user.first_name or "User"
     is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
 
-    # ⏱️ 1. 20-SECOND COOLDOWN SYSTEM (Admins ke liye limit nahi hai)
+    # ⏱️ 1. 20-SECOND COOLDOWN SYSTEM
     if not is_admin:
         current_time = time.time()
         last_search = USER_LAST_SEARCH.get(user_id, 0)
@@ -320,66 +320,69 @@ async def search_movie(client, msg):
     except Exception:
         results = []
 
-    # Agar DB me movie NAI MILI
-    if not results:
-        upcoming_info = await check_upcoming_movie(query)
+    # Agar DB me movie MIL GAYI
+    if results:
+        # DB Search logic handled inside smart_db_search
+        return
 
-        if upcoming_info:
-            up_date = format_date(upcoming_info.get('release_date', 'N/A'))
-            text = (
-                f"🎬 **Movie:** `{upcoming_info['title']}`\n"
-                f"📅 **Release Date:** `{up_date}`\n"
-                f"📌 **Status:** Upcoming\n"
-                f"⏳ **Days Remaining:** `{upcoming_info['days_remaining']}` Days\n"
-                f"ℹ️ _Ye movie release hote hi humare database me add kar di jayegi!_"
-            )
-            try:
-                await sw.delete()
-            except Exception:
-                pass
+    # Agar DB me movie NAI MILI -> TMDB check karo
+    upcoming_info = await check_upcoming_movie(query)
 
-            if upcoming_info.get('poster'):
-                res_msg = await client.send_photo(msg.chat.id, photo=upcoming_info['poster'], caption=text)
-            else:
-                res_msg = await client.send_message(msg.chat.id, text=text)
-
-            if not is_admin:
-                asyncio.create_task(delete_after_delay([res_msg], 300))
-            return
-
-        # ❌ Agar Movie Kahin Nahi Mili (Spelling Galat Ya Unknown)
+    if upcoming_info:
+        up_date = format_date(upcoming_info.get('release_date', 'N/A'))
+        text = (
+            f"🎬 **Movie:** `{upcoming_info['title']}`\n"
+            f"📅 **Release Date:** `{up_date}`\n"
+            f"📌 **Status:** Upcoming\n"
+            f"⏳ **Days Remaining:** `{upcoming_info['days_remaining']}` Days\n"
+            f"ℹ️ _Ye movie release hote hi humare database me add kar di jayegi!_"
+        )
         try:
             await sw.delete()
         except Exception:
             pass
 
-        # Google Search Link taaki user ko sahi naam aur year mil jaye
-        google_search_url = f"https://www.google.com/search?q={quote(query + ' movie release date imdb')}"
-
-        wrong_msg_text = (
-            f"❌ **Naam Ko Check Karein!**\n\n"
-            f"👤 **Name:** {user_name}\n"
-            f"🆔 **User ID:** `{user_id}`\n"
-            f"🔍 **Aapne Search Kiya:** `{msg.text}`\n\n"
-            f"⚠️ **Aapne jo naam daala hai wo galat hai ya movie abhi available nahi hai.**\n\n"
-            f"💡 **Kya Karein?**\n"
-            f"1️⃣ Niche diye gaye button par tap karke Google/IMDb par **sahi naam** check karein.\n"
-            f"2️⃣ Sahi naam aur year ko wahan se **copy** karein.\n"
-            f"3️⃣ Yahan aakar dobara search karein!"
-        )
-
-        btn = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔍 Google/IMDb Par Sahi Naam Dhoondein", url=google_search_url)]
-        ])
-
-        req_msg = await client.send_message(
-            msg.chat.id,
-            text=wrong_msg_text,
-            reply_markup=btn
-        )
+        if upcoming_info.get('poster'):
+            res_msg = await client.send_photo(msg.chat.id, photo=upcoming_info['poster'], caption=text)
+        else:
+            res_msg = await client.send_message(msg.chat.id, text=text)
 
         if not is_admin:
-            asyncio.create_task(delete_after_delay([req_msg], 120))
+            asyncio.create_task(delete_after_delay([res_msg], 300))
+        return
+
+    # ❌ Agar Movie Kahin Nahi Mili
+    try:
+        await sw.delete()
+    except Exception:
+        pass
+
+    google_search_url = f"https://www.google.com/search?q={quote(query + ' movie release date imdb')}"
+
+    wrong_msg_text = (
+        f"❌ **Naam Ko Check Karein!**\n\n"
+        f"👤 **Name:** {user_name}\n"
+        f"🆔 **User ID:** `{user_id}`\n"
+        f"🔍 **Aapne Search Kiya:** `{msg.text}`\n\n"
+        f"⚠️ **Aapne jo naam daala hai wo galat hai ya movie abhi available nahi hai.**\n\n"
+        f"💡 **Kya Karein?**\n"
+        f"1️⃣ Niche diye gaye button par tap karke Google/IMDb par **sahi naam** check karein.\n"
+        f"2️⃣ Sahi naam aur year ko wahan se **copy** karein.\n"
+        f"3️⃣ Yahan aakar dobara search karein!"
+    )
+
+    btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔍 Google/IMDb Par Sahi Naam Dhoondein", url=google_search_url)]
+    ])
+
+    req_msg = await client.send_message(
+        msg.chat.id,
+        text=wrong_msg_text,
+        reply_markup=btn
+    )
+
+    if not is_admin:
+        asyncio.create_task(delete_after_delay([req_msg], 120))
             return
 
         # Agar Upcoming bhi nai hai toh request save karo
