@@ -277,12 +277,12 @@ async def check_upcoming_movie(query):
 # 2. Main Search Handler
 @app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "delall", "del", "shortlink", "broadcast", "sms", "requests", "delreq", "clearreq"]))
 async def search_movie(client, msg):
-    user_id = msg.from_user.id
-    user_name = msg.from_user.first_name or "User"
-    is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
+    user_id = msg.from_user.id if msg.from_user else 0
+    user_name = msg.from_user.first_name if (msg.from_user and msg.from_user.first_name) else "User"
+    is_admin = bool(msg.from_user and msg.from_user.id in ADMIN_IDS)
 
     # ⏱️ 1. 20-SECOND COOLDOWN SYSTEM
-    if not is_admin:
+    if not is_admin and user_id:
         current_time = time.time()
         last_search = USER_LAST_SEARCH.get(user_id, 0)
         time_left = int(20 - (current_time - last_search))
@@ -299,7 +299,7 @@ async def search_movie(client, msg):
         USER_LAST_SEARCH[user_id] = current_time
 
     query = clean_name(msg.text)
-    if len(query) < 2:
+    if not query or len(query) < 2:
         return
 
     sw = await client.send_message(msg.chat.id, "🔍 Searching...")
@@ -312,18 +312,41 @@ async def search_movie(client, msg):
         except Exception:
             return d_str
 
+    # 2. DATABASE SEARCH
     results = []
     try:
         results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=3.0)
     except Exception:
         results = []
 
-    # Agar DB me movie MIL GAYI
+    # 🟢 A. AGAR DB ME MOVIE MIL GAYI -> Instant Results Bhejo
     if results:
-        # DB Search logic handled inside smart_db_search
+        try:
+            poster = await get_poster(query)
+            markup = await get_search_buttons(query, results, offset=0)
+            text = f"🎬 **Results for:** `{msg.text}`\n\n⏳ _Ye result 5 minute mein delete ho jayega._"
+            
+            if poster:
+                res_msg = await client.send_photo(msg.chat.id, photo=poster, caption=text, reply_markup=markup)
+            else:
+                res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
+
+            try:
+                await sw.delete()
+            except Exception:
+                pass
+
+            if not is_admin:
+                try:
+                    await msg.delete()
+                except Exception:
+                    pass
+                asyncio.create_task(delete_after_delay([res_msg], 300))
+        except Exception as e:
+            logger.error(f"Search Final Error: {e}")
         return
 
-    # Agar DB me movie NAI MILI -> TMDB check karo
+    # 🟡 B. AGAR DB ME NAI MILI -> TMDB Upcoming Check Karo
     upcoming_info = await check_upcoming_movie(query)
 
     if upcoming_info:
@@ -349,13 +372,13 @@ async def search_movie(client, msg):
             asyncio.create_task(delete_after_delay([res_msg], 300))
         return
 
-   # ❌ Agar Movie Kahin Nahi Mili (Request Save + Google Link)
+    # 🔴 C. AGAR KAHIN NAHI MILI -> Request Save Karo + Google Link Message Bhejo
     try:
         await sw.delete()
     except Exception:
         pass
 
-    # 1. Request ko Database me save karo (taaki Admin ko pata rahe)
+    # 1. Admin ke liye Request DataBase me save karo
     try:
         await client.requests.update_one(
             {"user_id": user_id, "query": query},
@@ -371,7 +394,7 @@ async def search_movie(client, msg):
     except Exception as e:
         logger.error(f"Request Save Error: {e}")
 
-    # 2. User ko Google Search Link aur Message bhej-o
+    # 2. User Message & Google Link Button
     google_search_url = f"https://www.google.com/search?q={quote(query + ' movie release date imdb')}"
 
     wrong_msg_text = (
@@ -379,9 +402,9 @@ async def search_movie(client, msg):
         f"👤 **Name:** {user_name}\n"
         f"🆔 **User ID:** `{user_id}`\n"
         f"🔍 **Search Query:** `{msg.text}`\n\n"
-        f"⚠️ **Ye movie abhi hamare database me nahi hai.** Humne aapki request Admin ko bhej di hai! Jaise hi add hogi aapko message mil jayega.\n\n"
+        f"⚠️ **Ye movie abhi hamare database me nahi hai.** Humne aapki request Admin ko bhej di hai!\n\n"
         f"💡 **Spelling Check Karein:**\n"
-        f"Agar aapne spelling galat likhi hai toh niche button par click karke Google/IMDb par **sahi naam copy** karke dobara search karein!"
+        f"Agar aapne spelling galat likhi hai toh niche button par tap karke Google/IMDb par **sahi naam copy** karke dobara search karein!"
     )
 
     btn = InlineKeyboardMarkup([
@@ -397,32 +420,6 @@ async def search_movie(client, msg):
     if not is_admin:
         asyncio.create_task(delete_after_delay([req_msg], 120))
     return
-
-    # Agar DB me MIL GAYI
-    try:
-        poster = await get_poster(query)
-        markup = await get_search_buttons(query, results, offset=0)
-        text = f"🎬 **Results for:** `{msg.text}`\n\n⏳ _Ye result 5 minute mein delete ho jayega._"
-        
-        if poster:
-            res_msg = await client.send_photo(msg.chat.id, photo=poster, caption=text, reply_markup=markup)
-        else:
-            res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
-        
-        try:
-            await sw.delete()
-        except Exception:
-            pass
-        
-        if not is_admin:
-            try:
-                await msg.delete()
-            except Exception:
-                pass
-            asyncio.create_task(delete_after_delay([res_msg], 300))
-            
-    except Exception as e:
-        logger.error(f"Search Final Error: {e}")
         
 # ------------ START HANDLER (PM) ------------
 
