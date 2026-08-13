@@ -459,8 +459,19 @@ async def start_handler(client, msg):
     except:
         pass
 
-    if not data:
-        return await msg.reply("👋 Namaste! Group me search karein.")
+    # Normal /start Message (Jab user Bina link ke /start bhejta hai)
+    if len(msg.command) < 2:
+        btn = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔍 Join Search Channel (Movie Search Karein)", url=MAIN_CHANNEL_LINK)]
+        ])
+        await msg.reply_text(
+            f"👋 **Namaste {msg.from_user.first_name}!**\n\n"
+            f"Main Search Bot hu 🍿\n\n"
+            f"Aap hamare **Search Channel** par jaakar kisi bhi movie ka naam likh kar search karein, aur file direct yahan PM me paayein!\n\n"
+            f"👇 Niche button par click karke channel join karein:",
+            reply_markup=btn
+        )
+        return
 
     if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
