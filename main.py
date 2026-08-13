@@ -226,8 +226,12 @@ from urllib.parse import quote
 async def check_upcoming_movie(query):
     if not TMDB_API_KEY:
         return None
-    
-    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(query)}"
+# Extra words (hindi, dubbed, full, movie) hata kar saaf search karega
+    clean_q = re.sub(r'(?i)\b(hindi|dubbed|english|tamil|telugu|full|movie|720p|1080p|480p)\b', '', query).strip()
+    if not clean_q:
+        clean_q = query
+
+    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(clean_q)}"}"
     try:
         # Strict 3-second network timeout
         timeout = aiohttp.ClientTimeout(total=3.0)
