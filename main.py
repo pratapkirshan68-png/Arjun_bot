@@ -226,7 +226,6 @@ async def search_movie(client, msg):
     if len(query) < 2: 
         return
 
-    sw = await client.send_message(msg.chat.id, "🔍 Searching...")
 sw = await client.send_message(msg.chat.id, "🔍 Searching...")
 
     try:
