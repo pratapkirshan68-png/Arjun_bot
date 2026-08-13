@@ -769,7 +769,8 @@ async def check_upcoming_movie(query):
 
 # ================= AUTO-FILTER SEARCH (GROUP) =================
 import re
-from urllib.parse import quote
+from urllib.parse 
+import quote
 
 # 1. Non-blocking Async TMDB Upcoming Check
 async def check_upcoming_movie(query):
