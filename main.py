@@ -357,7 +357,6 @@ async def check_upcoming_movie(query):
             clean_q = query
 
 # ================= AUTO-FILTER SEARCH (GROUP) =================
-import aiohttp
 import re
 from urllib.parse import quote
 
