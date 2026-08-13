@@ -226,16 +226,14 @@ async def search_movie(client, msg):
     if len(query) < 2: 
         return
 
-sw = await client.send_message(msg.chat.id, "🔍 Searching...")
+    sw = await client.send_message(msg.chat.id, "🔍 Searching...")
 
     try:
-        # Yahan humne timeout laga diya hai taaki bot 'Searching...' par na atke
         results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=6.0)
     except Exception as e:
         logger.error(f"DB Search Timeout or Error: {e}")
         results = []
 
-    # Date ko seedha (DD-MM-YYYY) karne ka chota function
     def format_date(d_str):
         if not d_str or d_str == "N/A":
             return "N/A"
@@ -286,7 +284,8 @@ sw = await client.send_message(msg.chat.id, "🔍 Searching...")
                             if data.get("results"):
                                 first_res = data["results"][0]
                                 tmdb_title = first_res.get("title") or first_res.get("name") or "N/A"
-                                tmdb_date = first_res.get("release_date") or first_res.get("first_air_date") or "N/A"
+                                raw_date = first_res.get("release_date") or first_res.get("first_air_date") or "N/A"
+                                tmdb_date = format_date(raw_date)
             except Exception:
                 pass
 
@@ -346,11 +345,10 @@ sw = await client.send_message(msg.chat.id, "🔍 Searching...")
             
     except Exception as e:
         await sw.edit(f"⚠️ **Code me yahan error hai Bhai:**\n`{e}`")
-        logger.error(f"Search Error: {e}")
+        logger.error(f5"Search Error: {e}")
         
 # ------------ START HANDLER (PM) ------------
-@app.on_message(filters.command("start") & filters.private)
-async def start_handler(client, msg):
+
     await client.users.update_one({"user_id": msg.from_user.id}, {"$set": {"user_id": msg.from_user.id}}, upsert=True)
     data = msg.command[1] if len(msg.command) > 1 else ""
 
