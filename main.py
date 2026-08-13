@@ -219,6 +219,55 @@ async def delete_after_delay(msgs, delay):
         except: pass
 
 # ================= AUTO-FILTER SEARCH (GROUP) =================
+import aiohttp
+from urllib.parse import quote
+
+# 1. Non-blocking Async TMDB Upcoming Check
+async def check_upcoming_movie(query):
+    if not TMDB_API_KEY:
+        return None
+    
+    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(query)}"
+    try:
+        # Strict 3-second network timeout
+        timeout = aiohttp.ClientTimeout(total=3.0)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    results = data.get("results", [])
+                    if not results:
+                        return None
+                    
+                    movie = results[0]
+                    title = movie.get("title") or movie.get("original_title") or query
+                    rel_date_str = movie.get("release_date", "")
+                    poster_path = movie.get("poster_path")
+                    
+                    days_remaining = "N/A"
+                    if rel_date_str:
+                        try:
+                            rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d")
+                            today = datetime.now()
+                            days_remaining = max(0, (rel_date - today).days)
+                        except Exception:
+                            pass
+
+                    poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+                    
+                    return {
+                        "title": title,
+                        "release_date": rel_date_str,
+                        "days_remaining": days_remaining,
+                        "poster": poster_url
+                    }
+    except Exception as e:
+        logger.error(f"TMDB Fetch Error: {e}")
+        return None
+    return None
+
+
+# 2. Main Search Handler
 @app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "delall", "del", "shortlink", "broadcast", "sms", "requests", "delreq", "clearreq"]))
 async def search_movie(client, msg):
     is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
@@ -237,22 +286,17 @@ async def search_movie(client, msg):
             return d_str
 
     results = []
+    # Force DB search to timeout safely in 3 seconds max
     try:
-        # DB Search timeout with shield
-        results = await asyncio.wait_for(asyncio.shield(smart_db_search(client, msg.text)), timeout=3.0)
+        results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=3.0)
     except Exception:
         results = []
 
-    # Agar DB me nahi mili, toh Turant Upcoming Movie check karega
+    # Agar DB me movie NAI MILI
     if not results:
-        upcoming_info = None
-        try:
-            if 'check_upcoming_movie' in globals():
-                upcoming_info = await asyncio.wait_for(check_upcoming_movie(msg.text), timeout=4.0)
-        except Exception as e:
-            logger.error(f"Upcoming Check Error: {e}")
+        # TMDB se Upcoming check karo
+        upcoming_info = await check_upcoming_movie(msg.text)
 
-        # Agar Upcoming Movie ki detail mili
         if upcoming_info:
             up_date = format_date(upcoming_info.get('release_date', 'N/A'))
             text = (
@@ -276,7 +320,7 @@ async def search_movie(client, msg):
                 asyncio.create_task(delete_after_delay([res_msg], 300))
             return
 
-        # Agar Upcoming bhi nahi mili toh Request Save karega
+        # Agar Upcoming bhi nai hai toh request save karo
         try:
             await sw.delete()
         except Exception:
@@ -292,21 +336,6 @@ async def search_movie(client, msg):
         user_name = msg.from_user.first_name if msg.from_user else "Unknown User"
         user_id = msg.from_user.id if msg.from_user else 0
 
-        tmdb_title, tmdb_date = "N/A", "N/A"
-        if TMDB_API_KEY:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}", timeout=4.0) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            if data.get("results"):
-                                first_res = data["results"][0]
-                                tmdb_title = first_res.get("title") or first_res.get("name") or "N/A"
-                                raw_date = first_res.get("release_date") or first_res.get("first_air_date") or "N/A"
-                                tmdb_date = format_date(raw_date)
-            except Exception:
-                pass
-
         await client.requests.update_one(
             {"user_id": user_id, "query": query},
             {"$set": {
@@ -314,43 +343,24 @@ async def search_movie(client, msg):
                 "user_name": user_name,
                 "query": query,
                 "raw_query": msg.text,
-                "tmdb_title": tmdb_title,
-                "tmdb_date": tmdb_date,
                 "time": datetime.now()
             }},
             upsert=True
         )
 
-        admin_alert = (
-            f"📥 **NEW MOVIE REQUEST**\n\n"
-            f"🎬 **Requested Movie:** `{msg.text}`\n"
-            f"👤 **User:** `{user_name}`\n"
-            f"🆔 **User ID:** `{user_id}`\n"
-            f"📌 **TMDB Title:** `{tmdb_title}` | **Date:** `{tmdb_date}`"
-        )
-
-        for admin_id in ADMIN_IDS:
-            try:
-                await client.send_message(chat_id=int(admin_id), text=admin_alert)
-            except Exception as e:
-                logger.error(f"Failed to send admin notification: {e}")
-
         if not is_admin:
             asyncio.create_task(delete_after_delay([req_msg, msg], 60))
         return
 
-    # Agar DB me mil gayi toh buttons aur results bhejega
+    # Agar DB me MIL GAYI
     try:
         poster = await get_poster(query)
         markup = await get_search_buttons(query, results, offset=0)
         text = f"🎬 **Results for:** `{msg.text}`\n\n⏳ _Ye result 5 minute mein delete ho jayega._"
         
-        try:
-            if poster:
-                res_msg = await client.send_photo(msg.chat.id, photo=poster, caption=text, reply_markup=markup)
-            else:
-                res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
-        except Exception:
+        if poster:
+            res_msg = await client.send_photo(msg.chat.id, photo=poster, caption=text, reply_markup=markup)
+        else:
             res_msg = await client.send_message(msg.chat.id, text=text, reply_markup=markup)
         
         try:
