@@ -219,19 +219,12 @@ async def delete_after_delay(msgs, delay):
         except: pass
 
 # ================= AUTO-FILTER SEARCH (GROUP) =================
-@app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "delall", "del", "shortlink", "broadcast", "sms", "requests", "delreq", "clearreq"]))
-async def search_movie(client, msg):
-    is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
-    query = clean_name(msg.text)
-    if len(query) < 2: 
-        return
-
-    sw = await client.send_message(msg.chat.id, "🔍 Searching...")
+sw = await client.send_message(msg.chat.id, "🔍 Searching...")
 
     try:
-        results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=6.0)
+        results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=5.0)
     except Exception as e:
-        logger.error(f"DB Search Timeout or Error: {e}")
+        logger.error(f"DB Search Timeout: {e}")
         results = []
 
     def format_date(d_str):
@@ -243,7 +236,13 @@ async def search_movie(client, msg):
             return d_str
 
     if not results:
-        upcoming_info = await check_upcoming_movie(msg.text)
+        upcoming_info = None
+        try:
+            # Yahan bhi 5 second ka timeout laga diya taaki TMDB par bot na atke
+            upcoming_info = await asyncio.wait_for(check_upcoming_movie(msg.text), timeout=5.0)
+        except Exception as e:
+            logger.error(f"Upcoming Check Timeout: {e}")
+
         if upcoming_info:
             up_date = format_date(upcoming_info.get('release_date', 'N/A'))
             text = (
@@ -278,7 +277,7 @@ async def search_movie(client, msg):
         if TMDB_API_KEY:
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}") as resp:
+                    async with session.get(f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(query)}", timeout=5.0) as resp:
                         if resp.status == 200:
                             data = await resp.json()
                             if data.get("results"):
