@@ -232,7 +232,7 @@ async def check_upcoming_movie(query):
     if not clean_q:
         clean_q = query
 
-    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(clean_q)}"}"
+    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
     try:
         # Strict 3-second network timeout
         timeout = aiohttp.ClientTimeout(total=3.0)
