@@ -345,7 +345,7 @@ async def search_movie(client, msg):
             
     except Exception as e:
         await sw.edit(f"⚠️ **Code me yahan error hai Bhai:**\n`{e}`")
-        logger.error(f5"Search Error: {e}")
+        logger.error(f"Search Error: {e}")
         
 # ------------ START HANDLER (PM) ------------
 
