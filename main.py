@@ -220,6 +220,7 @@ async def delete_after_delay(msgs, delay):
 
 # ================= AUTO-FILTER SEARCH (GROUP) =================
 import aiohttp
+import re
 from urllib.parse import quote
 
 # 1. Non-blocking Async TMDB Upcoming Check
