@@ -150,7 +150,7 @@ async def check_upcoming_movie(query):
                         rel_date = datetime.strptime(release_date_str, "%Y-%m-%d").date()
                         if rel_date > today:
                             days_left = (rel_date - today).days
-                            poster = f"https://image.tmdb.org/t/p/w500{item.get('poster_path')}" if item.get('poster_path') else None
+                            poster = f"https://image.tmdb.org/t/p/w380{item.get('poster_path')}" if item.get('poster_path') else None
                             title = item.get("title") or item.get("name")
                             return {
                                 "title": title,
