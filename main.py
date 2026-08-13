@@ -375,7 +375,7 @@ async def search_movie(client, msg):
         [InlineKeyboardButton("🔍 Google/IMDb Par Sahi Naam Dhoondein", url=google_search_url)]
     ])
 
-    req_msg = await client.send_message(
+     req_msg = await client.send_message(
         msg.chat.id,
         text=wrong_msg_text,
         reply_markup=btn
@@ -383,7 +383,7 @@ async def search_movie(client, msg):
 
     if not is_admin:
         asyncio.create_task(delete_after_delay([req_msg], 120))
-            return
+    return
 
         # Agar Upcoming bhi nai hai toh request save karo
         try:
