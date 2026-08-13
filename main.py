@@ -219,7 +219,14 @@ async def delete_after_delay(msgs, delay):
         except: pass
 
 # ================= AUTO-FILTER SEARCH (GROUP) =================
-sw = await client.send_message(msg.chat.id, "🔍 Searching...")
+@app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "delall", "del", "shortlink", "broadcast", "sms", "requests", "delreq", "clearreq"]))
+async def search_movie(client, msg):
+    is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
+    query = clean_name(msg.text)
+    if len(query) < 2: 
+        return
+
+    sw = await client.send_message(msg.chat.id, "🔍 Searching...")
 
     try:
         results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=5.0)
@@ -238,7 +245,6 @@ sw = await client.send_message(msg.chat.id, "🔍 Searching...")
     if not results:
         upcoming_info = None
         try:
-            # Yahan bhi 5 second ka timeout laga diya taaki TMDB par bot na atke
             upcoming_info = await asyncio.wait_for(check_upcoming_movie(msg.text), timeout=5.0)
         except Exception as e:
             logger.error(f"Upcoming Check Timeout: {e}")
