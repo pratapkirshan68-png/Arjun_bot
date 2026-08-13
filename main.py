@@ -227,15 +227,16 @@ async def search_movie(client, msg):
         return
 
     sw = await client.send_message(msg.chat.id, "🔍 Searching...")
+sw = await client.send_message(msg.chat.id, "🔍 Searching...")
 
     try:
-        # 8 second ka timeout taaki bot kabhi 'Searching...' par na atke
-        results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=8.0)
+        # Yahan humne timeout laga diya hai taaki bot 'Searching...' par na atke
+        results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=6.0)
     except Exception as e:
-        logger.error(f"DB Search Timeout/Error: {e}")
+        logger.error(f"DB Search Timeout or Error: {e}")
         results = []
 
-    # Date format fix karne ke liye function (YYYY-MM-DD ko DD-MM-YYYY karne ke liye)
+    # Date ko seedha (DD-MM-YYYY) karne ka chota function
     def format_date(d_str):
         if not d_str or d_str == "N/A":
             return "N/A"
@@ -247,9 +248,7 @@ async def search_movie(client, msg):
     if not results:
         upcoming_info = await check_upcoming_movie(msg.text)
         if upcoming_info:
-            # Upcoming movie ki date ko bhi seedha kar rahe hain
             up_date = format_date(upcoming_info.get('release_date', 'N/A'))
-            
             text = (
                 f"🎬 **Movie:** `{upcoming_info['title']}`\n"
                 f"📅 **Release Date:** `{up_date}`\n"
