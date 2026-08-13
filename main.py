@@ -222,6 +222,10 @@ async def delete_after_delay(msgs, delay):
 import aiohttp
 import re
 from urllib.parse import quote
+import time
+
+# User Cooldown Tracker (20-second limit ke liye)
+USER_LAST_SEARCH = {}
 
 # 1. Non-blocking Async TMDB Upcoming Check
 async def check_upcoming_movie(query):
