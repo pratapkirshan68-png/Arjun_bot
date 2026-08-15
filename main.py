@@ -7,7 +7,7 @@ import logging
 import base64
 from datetime import datetime
 from pyrogram import Client, filters, idle
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 from pyrogram.errors import UserNotParticipant, UserIsBlocked, InputUserDeactivated
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson.objectid import ObjectId
@@ -70,6 +70,24 @@ class MovieBot(Client):
             print("✅ MongoDB Connected Successfully!")
         except Exception as e:
             print(f"❌ MongoDB Connection Error: {e}")
+
+        try:
+            await self.set_bot_commands([
+                BotCommand("start", "Bot start karein ya file access karein"),
+                BotCommand("pratap", "Database ki movies aur bot stats dekhein (Admin)"),
+                BotCommand("stats", "Bot ka full status aur count dekhein (Admin)"),
+                BotCommand("requests", "Pending movie requests ki list dekhein (Admin)"),
+                BotCommand("delreq", "Koi ek movie request delete karein (Admin)"),
+                BotCommand("clearreq", "Saari pending requests clear karein (Admin)"),
+                BotCommand("shortlink", "Shortlink enable ya disable karein (Admin)"),
+                BotCommand("del", "Database se movie delete karein (Admin)"),
+                BotCommand("delall", "Database se movies delete karein (Admin)"),
+                BotCommand("broadcast", "Sabhi users ko message bhejein (Admin)")
+            ])
+            print("✅ Telegram Menu Commands Configured!")
+        except Exception as e:
+            print(f"⚠️ Could not set menu commands: {e}")
+
         print(f"🚀 BOT STARTED as @{self.me.username}")
 
     async def stop(self, *args):
@@ -105,6 +123,367 @@ def clean_name(text):
     return " ".join(text.split()).strip()
 
 async def notify_admins_about_request(client, user_name, user_id, user_mention, raw_query):
+    alert_text = (
+        f"📥 **NEW MOVIE REQUEST RECEIVED!**\n\n"
+        f"🎬 **Movie Name:** `{raw_query}`\n"
+        f"👤 **Requested By:** {user_mention}\n"
+        f"🆔 **User ID:** `{user_id}`\n"
+        f"🕒 **Time:** `{datetime.now().strftime('%d-%m-%Y %I:%M %p')}`\n\n"
+        f"💡 _Upload this movie in Storage Channel to auto-notify the user!_"
+    )
+    for admin_id in ADMIN_IDS:
+        try:
+            await client.send_message(chat_id=admin_id, text=alert_text)
+        except Exception as e:
+            logger.error(f"Could not send request alert to admin {admin_id}: {e}")
+
+async def get_tmdb_corrected_title(query):
+    if not TMDB_API_KEY:
+        return query
+    try:
+        clean_q = clean_name(query)
+        if not clean_q:
+            return query
+        url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=3.0) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    results = data.get("results", [])
+                    if results:
+                        top = results[0]
+                        corrected = top.get("title") or top.get("name") or top.get("original_title")
+                        if corrected:
+                            return corrected
+    except Exception as e:
+        logger.error(f"TMDB Spell Check Error: {e}")
+    return query
+
+async def get_poster(query):
+    clean_q = clean_name(query)
+    if not TMDB_API_KEY or not clean_q: 
+        return None
+    try:
+        url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=3.0) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("results"):
+                        for item in data["results"]:
+                            poster_path = item.get("poster_path")
+                            if poster_path:
+                                return f"https://image.tmdb.org/t/p/w500{poster_path}"
+    except Exception as e:
+        logger.error(f"TMDB Poster Error: {e}")
+    return None
+
+async def check_upcoming_movie(query):
+    if not TMDB_API_KEY:
+        return None
+
+    clean_q = re.sub(r'(?i)\b(hindi|dubbed|english|tamil|telugu|full|movie|720p|1080p|480p|web-dl|hdrip|bluray)\b', '', query).strip()
+    if not clean_q:
+        clean_q = query
+
+    try:
+        url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
+        timeout = aiohttp.ClientTimeout(total=4.0)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    results = data.get("results", [])
+                    if not results:
+                        return None
+
+                    today = datetime.now().date()
+
+                    for item in results:
+                        rel_date_str = item.get("release_date") or item.get("first_air_date")
+                        if rel_date_str:
+                            try:
+                                rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d").date()
+                                days_left = (rel_date - today).days
+                                title = item.get("title") or item.get("name") or item.get("original_title") or query
+                                poster_path = item.get("poster_path")
+                                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+
+                                if days_left > 0:
+                                    return {
+                                        "title": title,
+                                        "release_date": rel_date_str,
+                                        "days_remaining": f"{days_left} Days",
+                                        "status": "Upcoming",
+                                        "poster": poster_url
+                                    }
+                            except Exception:
+                                continue
+
+                    top_item = results[0]
+                    rel_date_str = top_item.get("release_date") or top_item.get("first_air_date") or "N/A"
+                    title = top_item.get("title") or top_item.get("name") or top_item.get("original_title") or query
+                    poster_path = top_item.get("poster_path")
+                    poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+
+                    days_status = "N/A"
+                    if rel_date_str != "N/A":
+                        try:
+                            rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d").date()
+                            if rel_date > today:
+                                days_status = f"{(rel_date - today).days} Days"
+                            else:
+                                days_status = "Already Released"
+                        except Exception:
+                            days_status = "N/A"
+
+                    return {
+                        "title": title,
+                        "release_date": rel_date_str,
+                        "days_remaining": days_status,
+                        "status": "TMDB Found",
+                        "poster": poster_url
+                    }
+    except Exception as e:
+        logger.error(f"TMDB Upcoming Error: {e}")
+        return None
+    return None
+
+async def smart_db_search(client, query):
+    all_docs = await client.movies.find({}).to_list(length=2000)
+    matched = []
+    
+    clean_q = clean_name(query)
+    for doc in all_docs:
+        doc_title = clean_name(doc.get("title", ""))
+        if clean_q in doc_title or doc_title in clean_q:
+            matched.append(doc)
+            continue
+        ratio = fuzz.partial_ratio(clean_q, doc_title)
+        if ratio > 75:
+            matched.append(doc)
+
+    if not matched:
+        corrected_title = await get_tmdb_corrected_title(query)
+        clean_corrected = clean_name(corrected_title)
+        if clean_corrected and clean_corrected != clean_q:
+            for doc in all_docs:
+                doc_title = clean_name(doc.get("title", ""))
+                if clean_corrected in doc_title or doc_title in clean_corrected:
+                    matched.append(doc)
+                    continue
+                ratio = fuzz.partial_ratio(clean_corrected, doc_title)
+                if ratio > 75:
+                    matched.append(doc)
+
+    return matched
+
+async def get_shortlink(url):
+    if not SHORTLINK_ENABLED: return url
+    try:
+        api_url = f"https://{SHORT_DOMAIN}/api?api={SHORT_API_KEY}&url={url}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=10) as resp:
+                res = await resp.json()
+                if res.get("status") == "success": return res["shortenedUrl"]
+    except Exception: pass
+    return url
+
+async def get_search_buttons(query, results, offset=0):
+    btn_list = []
+    me = await app.get_me()
+    for res in results[offset : offset + PAGE_SIZE]:
+        db_id = str(res["_id"])
+        db_title = res.get("original_title", res["title"])
+        display_name = db_title[:35] + "..." if len(db_title) > 35 else db_title
+        bot_url = f"https://t.me/{me.username}?start=file_{db_id}"
+        final_link = await get_shortlink(bot_url)
+        btn_list.append([InlineKeyboardButton(f"🎬 {display_name}", url=final_link)])
+        
+    nav_btns = []
+    if offset > 0:
+        nav_btns.append(InlineKeyboardButton("⬅️ Back", callback_data=f"page_{offset - PAGE_SIZE}_{quote(query)}"))
+    if offset + PAGE_SIZE < len(results):
+        nav_btns.append(InlineKeyboardButton("Next ➡️", callback_data=f"page_{offset + PAGE_SIZE}_{quote(query)}"))
+    
+    if nav_btns: btn_list.append(nav_btns)
+    
+    query_b64 = base64.urlsafe_b64encode(query.encode()).decode().rstrip("=")
+    btn_list.append([InlineKeyboardButton("📂 GET ALL FILES (IN PM) 📂", url=f"https://t.me/{me.username}?start=all_{query_b64}")])
+    return InlineKeyboardMarkup(btn_list)
+
+async def delete_after_delay(msgs, delay):
+    await asyncio.sleep(delay)
+    for m in msgs:
+        try: await m.delete()
+        except Exception: pass
+
+# ================= ALL ADMIN COMMAND HANDLERS =================
+
+# 1. STATS COMMAND (/pratap & /stats) - ADMIN ONLY
+@app.on_message(filters.command(["pratap", "stats"]) & filters.user(ADMIN_IDS))
+async def stats_cmd(client, msg):
+    count = await client.movies.count_documents({})
+    users_count = await client.users.count_documents({})
+    req_count = await client.requests.count_documents({})
+    await msg.reply(
+        f"📊 **Bot Status (Admin)**\n\n"
+        f"🎬 Total Movies: `{count}`\n"
+        f"👤 Total Users: `{users_count}`\n"
+        f"📌 Pending Requests: `{req_count}`"
+    )
+
+# 2. VIEW REQUESTS COMMAND (/requests) - ADMIN ONLY
+@app.on_message(filters.command("requests") & filters.user(ADMIN_IDS))
+async def list_requests_cmd(client, msg):
+    reqs = await client.requests.find({}).to_list(length=500)
+    if not reqs:
+        return await msg.reply("✅ Koi pending requests nahi hain!")
+        
+    header = f"📥 **TOTAL PENDING REQUESTS ({len(reqs)}):**\n\n"
+    chunks = []
+    current_chunk = header
+
+    for idx, r in enumerate(reqs, 1):
+        u_name = r.get("user_name", "User")
+        u_id = r.get("user_id", "N/A")
+        movie = r.get("raw_query", r.get("query", "Unknown"))
+        
+        entry = (
+            f"**{idx}.** 🎬 `{movie}`\n"
+            f"   👤 [{u_name}](tg://user?id={u_id}) (`{u_id}`)\n\n"
+        )
+        
+        if len(current_chunk) + len(entry) > 3800:
+            chunks.append(current_chunk)
+            current_chunk = entry
+        else:
+            current_chunk += entry
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    for chunk in chunks:
+        await msg.reply(chunk, disable_web_page_preview=True)
+
+# 3. DELETE SINGLE REQUEST (/delreq) - ADMIN ONLY
+@app.on_message(filters.command("delreq") & filters.user(ADMIN_IDS))
+async def delete_single_request_cmd(client, msg):
+    if len(msg.command) < 2:
+        return await msg.reply("Usage:\n`/delreq movie_name`")
+    
+    query = clean_name(" ".join(msg.command[1:]))
+    res = await client.requests.delete_many({
+        "query": {"$regex": query, "$options": "i"}
+    })
+    await msg.reply(f"🗑️ Cleaned: Deleted `{res.deleted_count}` pending request(s) matching `{query}`.")
+
+# 4. CLEAR ALL REQUESTS (/clearreq) - ADMIN ONLY
+@app.on_message(filters.command("clearreq") & filters.user(ADMIN_IDS))
+async def clear_all_requests_cmd(client, msg):
+    res = await client.requests.delete_many({})
+    await msg.reply(f"🗑️ MongoDB Cleaned! Removed all `{res.deleted_count}` pending requests.")
+
+# 5. SHORTLINK TOGGLE (/shortlink) - ADMIN ONLY
+@app.on_message(filters.command("shortlink") & filters.user(ADMIN_IDS))
+async def toggle_shortlink_cmd(client, msg):
+    global SHORTLINK_ENABLED
+    choice = msg.command[1].lower() if len(msg.command) > 1 else ""
+    if choice == "on": 
+        SHORTLINK_ENABLED = True
+        await msg.reply("✅ Shortlink Enabled")
+    elif choice == "off": 
+        SHORTLINK_ENABLED = False
+        await msg.reply("❌ Shortlink Disabled")
+    else:
+        await msg.reply(f"Status: `{'ON' if SHORTLINK_ENABLED else 'OFF'}`\nUse `/shortlink on` or `/shortlink off`")
+
+# 6. DELETE MOVIE FROM DB (/del & /delall) - ADMIN ONLY
+@app.on_message(filters.command(["del", "delall"]) & filters.user(ADMIN_IDS))
+async def delete_movie_cmd(client, msg):
+    if len(msg.command) < 2:
+        return await msg.reply("Usage:\n/del movie_name")
+    query = clean_name(" ".join(msg.command[1:]))
+    result = await client.movies.delete_many({
+        "title": {"$regex": query, "$options": "i"}
+    })
+    await msg.reply(f"🗑️ Deleted: {result.deleted_count} movie(s).")
+
+# 7. BROADCAST COMMAND (/broadcast & /sms) - ADMIN ONLY
+@app.on_message(filters.command(["broadcast", "sms"]) & filters.user(ADMIN_IDS))
+async def broadcast_cmd(client, msg):
+    if not msg.reply_to_message:
+        return await msg.reply("⚠️ Broadcast bhejne ke liye kisi message ko reply karein `/broadcast` ya `/sms` se.")
+        
+    status = await msg.reply("📢 **Broadcast shuru ho raha hai...**")
+    users = await client.users.find({}).to_list(length=100000)
+    
+    total = len(users)
+    success = 0
+    blocked = 0
+    failed = 0
+    
+    for u in users:
+        uid = u.get("user_id")
+        if not uid: continue
+        try:
+            await msg.reply_to_message.copy(uid)
+            success += 1
+            await asyncio.sleep(0.05)
+        except (UserIsBlocked, InputUserDeactivated):
+            blocked += 1
+        except Exception:
+            failed += 1
+            
+    report = (
+        f"📊 **Broadcast Finished Report**\n\n"
+        f"👥 **Total Users:** `{total}`\n"
+        f"✅ **Sent Successfully:** `{success}`\n"
+        f"🚫 **Blocked/Deleted:** `{blocked}`\n"
+        f"❌ **Failed:** `{failed}`"
+    )
+    await status.edit(report)
+
+# ================= USER HANDLERS =================
+
+# START COMMAND (PM)
+@app.on_message(filters.command("start") & filters.private)
+async def start_cmd(client, msg):
+    await client.users.update_one({"user_id": msg.from_user.id}, {"$set": {"user_id": msg.from_user.id}}, upsert=True)
+    data = msg.command[1] if len(msg.command) > 1 else ""
+
+    try:
+        await client.get_chat_member(FSUB_CHANNEL, msg.from_user.id)
+    except UserNotParticipant:
+        invite = (await client.get_chat(FSUB_CHANNEL)).invite_link or MAIN_CHANNEL_LINK
+        me = await client.get_me()
+        buttons = [[InlineKeyboardButton("📢 JOIN CHANNEL 📢", url=invite)]]
+        if data:
+            try_again_link = f"https://t.me/{me.username}?start={data}"
+            buttons.append([InlineKeyboardButton("🔄 TRY AGAIN / VERIFY 🔄", url=try_again_link)])
+        btn = InlineKeyboardMarkup(buttons)
+        return await msg.reply("❌ Pehle channel join karein!", reply_markup=btn)
+    except Exception: pass
+
+    if not data:
+        group_link = MAIN_CHANNEL_LINK
+        if SEARCH_CHAT and SEARCH_CHAT != 0:
+            try:
+                search_group = await client.get_chat(SEARCH_CHAT)
+                group_link = search_group.invite_link or (f"https://t.me/{search_group.username}" if search_group.username else MAIN_CHANNEL_LINK)
+            except Exception:
+                group_link = MAIN_CHANNEL_LINK
+
+        btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔍 GO TO SEARCH GROUP 🔍", url=group_link)]])
+        return await msg.reply(
+            "👋 **Namaste!**\n\nMovies search karne ke liye niche diye gaye button par click karke hamare **Search Group** me jayein.",
+            reply_markup=btn
+        )
+
+    if data.startswith("file_"):
+        res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
+        if res:
+            title = res.get('original_title', async def notify_admins_about_request(client, user_name, user_id, user_mention, raw_query):
     """Admin KO SMS / Direct DM Message bhejega jab koi request aayegi"""
     alert_text = (
         f"📥 **NEW MOVIE REQUEST RECEIVED!**\n\n"
