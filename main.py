@@ -14,7 +14,6 @@ from bson.objectid import ObjectId
 from aiohttp import web
 from urllib.parse import quote, unquote
 from fuzzywuzzy import fuzz
-import google.generativeai as genai
 
 # ================= CONFIGURATION =================
 def get_clean_var(key, default=""):
@@ -26,7 +25,6 @@ API_HASH = get_clean_var("API_HASH", "")
 BOT_TOKEN = get_clean_var("BOT_TOKEN", "")
 MONGO_URL = get_clean_var("MONGO_URL", "")
 TMDB_API_KEY = get_clean_var("TMDB_API_KEY", "")
-GEMINI_API_KEY = get_clean_var("GEMINI_API_KEY", "")
 
 raw_admins = get_clean_var("ADMIN_IDS", "0").replace(",", " ").split()
 ADMIN_IDS = [int(x) for x in raw_admins if x.strip().isdigit()]
@@ -53,9 +51,6 @@ PAGE_SIZE = 6
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 # ================= BOT CLIENT =================
 class MovieBot(Client):
@@ -104,6 +99,392 @@ def clean_name(text):
         r'\bweb\b', r'\bdl\b', r'\bhs\b', r'\bhd\b', r'\bmkv\b', r'\bmp4\b', r'\bavi\b',
         r'hindi', r'english', r'italian', r'dual audio', r'esubs', r'sub',
         r'aac', r'dd5', r'lol', r'ms', r'join'
+    ]
+
+    for word in junk:
+        text = re.sub(word, '', text, flags=re.IGNORECASE)
+
+    # Special characters clean & extra spaces remove
+    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
+    return " ".join(text.split()).strip()
+
+async def notify_admins_about_request(client, user_name, user_id, user_mention, raw_query):
+    """Admin KO SMS / Direct DM Message bhejega jab koi request aayegi"""
+    alert_text = (
+        f"📥 **NEW MOVIE REQUEST RECEIVED!**\n\n"
+        f"🎬 **Movie Name:** `{raw_query}`\n"
+        f"👤 **Requested By:** {user_mention}\n"
+        f"🆔 **User ID:** `{user_id}`\n"
+        f"🕒 **Time:** `{datetime.now().strftime('%d-%m-%Y %I:%M %p')}`\n\n"
+        f"💡 _Upload this movie in Storage Channel to auto-notify the user!_"
+    )
+    for admin_id in ADMIN_IDS:
+        try:
+            await client.send_message(chat_id=admin_id, text=alert_text)
+        except Exception as e:
+            logger.error(f"Could not send request alert to admin {admin_id}: {e}")
+
+async def get_tmdb_corrected_title(query):
+    """Corrects misspelled user search query using TMDB API"""
+    if not TMDB_API_KEY:
+        return query
+    try:
+        clean_q = clean_name(query)
+        if not clean_q:
+            return query
+        url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=3.0) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    results = data.get("results", [])
+                    if results:
+                        top = results[0]
+                        corrected = top.get("title") or top.get("name") or top.get("original_title")
+                        if corrected:
+                            return corrected
+    except Exception as e:
+        logger.error(f"TMDB Spell Check Error: {e}")
+    return query
+
+async def get_poster(query):
+    clean_q = clean_name(query)
+    if not TMDB_API_KEY or not clean_q: 
+        return None
+    try:
+        url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=3.0) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("results"):
+                        for item in data["results"]:
+                            poster_path = item.get("poster_path")
+                            if poster_path:
+                                return f"https://image.tmdb.org/t/p/w500{poster_path}"
+    except Exception as e:
+        logger.error(f"TMDB Poster Error: {e}")
+    return None
+
+async def check_upcoming_movie(query):
+    if not TMDB_API_KEY:
+        return None
+
+    clean_q = re.sub(r'(?i)\b(hindi|dubbed|english|tamil|telugu|full|movie|720p|1080p|480p|web-dl|hdrip|bluray)\b', '', query).strip()
+    if not clean_q:
+        clean_q = query
+
+    try:
+        url = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={quote(clean_q)}"
+        timeout = aiohttp.ClientTimeout(total=4.0)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    results = data.get("results", [])
+                    if not results:
+                        return None
+
+                    today = datetime.now().date()
+
+                    for item in results:
+                        rel_date_str = item.get("release_date") or item.get("first_air_date")
+                        if rel_date_str:
+                            try:
+                                rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d").date()
+                                days_left = (rel_date - today).days
+                                title = item.get("title") or item.get("name") or item.get("original_title") or query
+                                poster_path = item.get("poster_path")
+                                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+
+                                if days_left > 0:
+                                    return {
+                                        "title": title,
+                                        "release_date": rel_date_str,
+                                        "days_remaining": f"{days_left} Days",
+                                        "status": "Upcoming",
+                                        "poster": poster_url
+                                    }
+                            except Exception:
+                                continue
+
+                    top_item = results[0]
+                    rel_date_str = top_item.get("release_date") or top_item.get("first_air_date") or "N/A"
+                    title = top_item.get("title") or top_item.get("name") or top_item.get("original_title") or query
+                    poster_path = top_item.get("poster_path")
+                    poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+
+                    days_status = "N/A"
+                    if rel_date_str != "N/A":
+                        try:
+                            rel_date = datetime.strptime(rel_date_str, "%Y-%m-%d").date()
+                            if rel_date > today:
+                                days_status = f"{(rel_date - today).days} Days"
+                            else:
+                                days_status = "Already Released"
+                        except Exception:
+                            days_status = "N/A"
+
+                    return {
+                        "title": title,
+                        "release_date": rel_date_str,
+                        "days_remaining": days_status,
+                        "status": "TMDB Found",
+                        "poster": poster_url
+                    }
+    except Exception as e:
+        logger.error(f"TMDB Upcoming Error: {e}")
+        return None
+    return None
+
+async def smart_db_search(client, query):
+    all_docs = await client.movies.find({}).to_list(length=2000)
+    matched = []
+    
+    clean_q = clean_name(query)
+    for doc in all_docs:
+        doc_title = clean_name(doc.get("title", ""))
+        if clean_q in doc_title or doc_title in clean_q:
+            matched.append(doc)
+            continue
+        ratio = fuzz.partial_ratio(clean_q, doc_title)
+        if ratio > 75:
+            matched.append(doc)
+
+    if not matched:
+        corrected_title = await get_tmdb_corrected_title(query)
+        clean_corrected = clean_name(corrected_title)
+        if clean_corrected and clean_corrected != clean_q:
+            for doc in all_docs:
+                doc_title = clean_name(doc.get("title", ""))
+                if clean_corrected in doc_title or doc_title in clean_corrected:
+                    matched.append(doc)
+                    continue
+                ratio = fuzz.partial_ratio(clean_corrected, doc_title)
+                if ratio > 75:
+                    matched.append(doc)
+
+    return matched
+
+async def get_shortlink(url):
+    if not SHORTLINK_ENABLED: return url
+    try:
+        api_url = f"https://{SHORT_DOMAIN}/api?api={SHORT_API_KEY}&url={url}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=10) as resp:
+                res = await resp.json()
+                if res.get("status") == "success": return res["shortenedUrl"]
+    except Exception: pass
+    return url
+
+async def get_search_buttons(query, results, offset=0):
+    btn_list = []
+    me = await app.get_me()
+    for res in results[offset : offset + PAGE_SIZE]:
+        db_id = str(res["_id"])
+        db_title = res.get("original_title", res["title"])
+        display_name = db_title[:35] + "..." if len(db_title) > 35 else db_title
+        bot_url = f"https://t.me/{me.username}?start=file_{db_id}"
+        final_link = await get_shortlink(bot_url)
+        btn_list.append([InlineKeyboardButton(f"🎬 {display_name}", url=final_link)])
+        
+    nav_btns = []
+    if offset > 0:
+        nav_btns.append(InlineKeyboardButton("⬅️ Back", callback_data=f"page_{offset - PAGE_SIZE}_{quote(query)}"))
+    if offset + PAGE_SIZE < len(results):
+        nav_btns.append(InlineKeyboardButton("Next ➡️", callback_data=f"page_{offset + PAGE_SIZE}_{quote(query)}"))
+    
+    if nav_btns: btn_list.append(nav_btns)
+    
+    query_b64 = base64.urlsafe_b64encode(query.encode()).decode().rstrip("=")
+    btn_list.append([InlineKeyboardButton("📂 GET ALL FILES (IN PM) 📂", url=f"https://t.me/{me.username}?start=all_{query_b64}")])
+    return InlineKeyboardMarkup(btn_list)
+
+async def delete_after_delay(msgs, delay):
+    await asyncio.sleep(delay)
+    for m in msgs:
+        try: await m.delete()
+        except Exception: pass
+
+# ================= START HANDLER (PM) =================
+@app.on_message(filters.command("start") & filters.private)
+async def start_cmd(client, msg):
+    await client.users.update_one({"user_id": msg.from_user.id}, {"$set": {"user_id": msg.from_user.id}}, upsert=True)
+    data = msg.command[1] if len(msg.command) > 1 else ""
+
+    try:
+        await client.get_chat_member(FSUB_CHANNEL, msg.from_user.id)
+    except UserNotParticipant:
+        invite = (await client.get_chat(FSUB_CHANNEL)).invite_link or MAIN_CHANNEL_LINK
+        me = await client.get_me()
+        buttons = [[InlineKeyboardButton("📢 JOIN CHANNEL 📢", url=invite)]]
+        if data:
+            try_again_link = f"https://t.me/{me.username}?start={data}"
+            buttons.append([InlineKeyboardButton("🔄 TRY AGAIN / VERIFY 🔄", url=try_again_link)])
+        btn = InlineKeyboardMarkup(buttons)
+        return await msg.reply("❌ Pehle channel join karein!", reply_markup=btn)
+    except Exception: pass
+
+    if not data:
+        return await msg.reply("👋 Namaste! Kripya movies search karne ke liye hamare group ka istemal karein.")
+
+    if data.startswith("file_"):
+        res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
+        if res:
+            title = res.get('original_title', res.get('title', 'Movie'))
+            file_name = res.get('file_name', title)
+            cap = f"📁 **{file_name}**\n\n⚠️ **Ye message 5 min mein delete ho jayega. Apne Saved Messages me forward kar lein!**"
+            
+            sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap)
+            asyncio.create_task(delete_after_delay([sf], 300))
+
+    elif data.startswith("all_"):
+        try:
+            b64_str = data.split("_", 1)[1]
+            b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
+            search_q = base64.urlsafe_b64encode(b64_str).decode()
+        except Exception:
+            search_q = unquote(data.split("_", 1)[1])
+
+        results = await smart_db_search(client, search_q)
+        if not results:
+            return await msg.reply("❌ Files nahi mili!")
+
+        sts = await msg.reply(f"🔍 **Found {len(results)} files. Sending...**")
+        sent_messages = []
+        for res in results:
+            try:
+                cap = f"📁 **{res.get('original_title', res['title'])}**\n\n⚠️ **5 min mein delete ho jayega.**"
+                poster = res.get("poster") or res.get("poster_url")
+                if poster:
+                    m = await client.send_photo(msg.chat.id, photo=poster, caption=cap)
+                else:
+                    m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
+                sent_messages.append(m)
+                await asyncio.sleep(1.2)
+            except Exception: pass
+
+        await sts.edit("✅ **Batch Complete!**")
+        asyncio.create_task(delete_after_delay(sent_messages + [sts], 300))
+
+# PM Text Handler
+@app.on_message(filters.private & filters.text & ~filters.command(["start"]))
+async def pm_text_handler(client, msg):
+    await msg.reply("👋 Namaste! Kripya movies search karne ke liye hamare group ka istemal karein.")
+
+# ================= AUTO-FILTER SEARCH (GROUP) =================
+@app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.command(["start", "pratap", "delall", "del", "shortlink", "broadcast", "sms", "requests", "delreq", "clearreq"]))
+async def search_movie(client, msg):
+    is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
+    query = clean_name(msg.text)
+    if len(query) < 2: 
+        return
+
+    # User details format
+    user_name = msg.from_user.first_name if msg.from_user else "User"
+    user_id = msg.from_user.id if msg.from_user else 0
+    user_mention = f"[{user_name}](tg://user?id={user_id})" if user_id else "User"
+
+    sw = await client.send_message(msg.chat.id, "🔍 Searching...")
+
+    def format_date(d_str):
+        if not d_str or d_str == "N/A":
+            return "N/A"
+        try:
+            return datetime.strptime(d_str.strip(), "%Y-%m-%d").strftime("%d-%m-%Y")
+        except Exception:
+            return d_str
+
+    results = []
+    try:
+        results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=5.0)
+    except Exception:
+        results = []
+
+    # AGAR DB ME MOVIE NAHI MILI (REQUEST HANDLER)
+    if not results:
+        # 1. MongoDB me Request Save Karein
+        await client.requests.update_one(
+            {"user_id": user_id, "query": query},
+            {"$set": {
+                "user_id": user_id,
+                "user_name": user_name,
+                "query": query,
+                "raw_query": msg.text,
+                "time": datetime.now()
+            }},
+            upsert=True
+        )
+
+        # 2. ADMIN KO SMS / DM NOTIFICATION BHEJAIN
+        asyncio.create_task(notify_admins_about_request(client, user_name, user_id, user_mention, msg.text))
+
+        upcoming_info = None
+        try:
+            upcoming_info = await asyncio.wait_for(check_upcoming_movie(msg.text), timeout=4.0)
+        except Exception:
+            upcoming_info = None
+
+        if upcoming_info:
+            up_date = format_date(upcoming_info.get('release_date', 'N/A'))
+            days_str = upcoming_info.get('days_remaining', 'N/A')
+            status_str = upcoming_info.get('status', 'Upcoming')
+
+            text = (
+                f"🎬 **Movie:** `{upcoming_info['title']}`\n"
+                f"👤 **Requested by:** {user_mention} (`{user_id}`)\n"
+                f"📅 **Release Date:** `{up_date}`\n"
+                f"📌 **Status:** `{status_str}`\n"
+                f"⏳ **Info / Days Left:** `{days_str}`\n\n"
+                f"ℹ️ _Ye movie release/available hote hi hamare database me add kar di jayegi!_"
+            )
+            try:
+                await sw.delete()
+            except Exception:
+                pass
+
+            res_msg = None
+            if upcoming_info.get('poster'):
+                try:
+                    res_msg = await client.send_photo(msg.chat.id, photo=upcoming_info['poster'], caption=text)
+                except Exception:
+                    res_msg = await client.send_message(msg.chat.id, text=text)
+            else:
+                res_msg = await client.send_message(msg.chat.id, text=text)
+
+            if not is_admin and res_msg:
+                asyncio.create_task(delete_after_delay([res_msg], 300))
+            return
+
+        try:
+            await sw.delete()
+        except Exception:
+            pass
+
+        req_msg = await client.send_message(
+            msg.chat.id,
+            f"👤 **Requested by:** {user_mention} (`{user_id}`)\n\n"
+            "Maaf kijiye, ye movie abhi hamare database me available nahi hai.\n\n"
+            "Humne aapki request admin ko bhej di hai.\n"
+            "Jaise hi movie database me add hogi, aapko automatically private message mil jayega."
+        )
+
+        if not is_admin:
+            asyncio.create_task(delete_after_delay([req_msg, msg], 60))
+        return
+
+    # AGAR DB ME MOVIE MIL GAYI
+    try:
+        poster = await get_poster(query)
+        markup = await get_search_buttons(query, results, offset=0)
+        
+        text = (
+            f"🎬 **Results for:** 📌 `{msg.text}`\n"
+            f"👤 **Requested by:** {user_mention} (`{user_id}`)\n\n"
+            f"⏳ _Ye result 5 minute mein delete ho jayega._"
+        )
+        
+        if poster:
     ]
 
     for word in junk:
