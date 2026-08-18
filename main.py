@@ -747,10 +747,10 @@ async def add_to_db(client, msg):
 
     caption_text = (
         f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
-        f"📌 **TITLE :** {title_display}\n"
+        f"📌 **TITLE :** `{title_display}`\n"
         f"📅 **RELEASE DATE :** {rel_date}\n"
         f"⭐ **RATING :** {rating} / 10\n"
-        f"📁 **FILE NAME :** {raw_caption}\n\n"
+        f"📁 **FILE NAME :** `{raw_caption}`\n\n"
         f"👇 **DOWNLOAD HERE** 👇\n"
         f"Movie ka naam copy karke search group me likh dena he."
     )
