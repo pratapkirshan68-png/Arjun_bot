@@ -699,11 +699,18 @@ async def add_to_db(client, msg):
         except Exception:
             group_link = MAIN_CHANNEL_LINK
 
-    # Clean movie title extract karein
-    raw_clean = raw_caption.replace('.', ' ').replace('_', ' ')
-    search_title = re.sub(r'\b(19\d{2}|20\d{2})\b.*', '', raw_clean, flags=re.IGNORECASE).strip()
+    # Clean title aur year extraction
+    clean_text = raw_caption.replace('.', ' ').replace('_', ' ')
+    year_match = re.search(r'\b(19\d{2}|20\d{2})\b', clean_text)
+    year = year_match.group(1) if year_match else None
+
+    if year:
+        search_title = clean_text.split(year)[0].strip()
+    else:
+        search_title = re.sub(r'(?i)\b(720p|1080p|2160p|4k|web-dl|webrip|hdrip|bluray|x264|x265|hevc|hindi|english|esub|mkv|mp4)\b.*', '', clean_text).strip()
+
     if not search_title:
-        search_title = raw_clean.strip()
+        search_title = clean_text.strip()
 
     poster_url = None
     rel_date = "N/A"
@@ -712,15 +719,13 @@ async def add_to_db(client, msg):
 
     if TMDB_API_KEY:
         try:
-            # File name se year extract karein
-            year_match = re.search(r'\b(19\d{2}|20\d{2})\b', raw_caption)
-            year = year_match.group(1) if year_match else None
+            # Direct URL Encoding (No quote import needed)
+            encoded_title = search_title.replace(' ', '%20')
 
-            # Year ke sath search
             if year:
-                url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}&primary_release_year={year}"
+                url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={encoded_title}&primary_release_year={year}"
             else:
-                url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}"
+                url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={encoded_title}"
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as resp:
@@ -728,12 +733,21 @@ async def add_to_db(client, msg):
                         data = await resp.json()
                         results = data.get("results", [])
 
+                        # Fallback 1: Search without year restriction
                         if not results and year:
-                            url_fallback = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}"
+                            url_fallback = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={encoded_title}"
                             async with session.get(url_fallback) as resp2:
                                 if resp2.status == 200:
                                     data2 = await resp2.json()
                                     results = data2.get("results", [])
+
+                        # Fallback 2: Multi search
+                        if not results:
+                            url_multi = f"https://api.themoviedb.org/3/search/multi?api_key={TMDB_API_KEY}&query={encoded_title}"
+                            async with session.get(url_multi) as resp3:
+                                if resp3.status == 200:
+                                    data3 = await resp3.json()
+                                    results = data3.get("results", [])
 
                         valid_item = None
                         for res in results:
