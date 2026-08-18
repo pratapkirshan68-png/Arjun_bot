@@ -699,6 +699,12 @@ async def add_to_db(client, msg):
         except Exception:
             group_link = MAIN_CHANNEL_LINK
 
+    # Clean movie title extract karein
+    raw_clean = raw_caption.replace('.', ' ').replace('_', ' ')
+    search_title = re.sub(r'\b(19\d{2}|20\d{2})\b.*', '', raw_clean, flags=re.IGNORECASE).strip()
+    if not search_title:
+        search_title = raw_clean.strip()
+
     poster_url = None
     rel_date = "N/A"
     rating = "N/A"
@@ -744,7 +750,7 @@ async def add_to_db(client, msg):
 
         except Exception as e:
             logger.error(f"TMDB Fetch Error: {e}")
-
+            
     caption_text = (
         f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
         f"📌 **TITLE :** `{title_display}`\n"
