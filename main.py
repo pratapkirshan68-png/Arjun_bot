@@ -704,48 +704,48 @@ async def add_to_db(client, msg):
     rating = "N/A"
     title_display = search_title
 
-if TMDB_API_KEY:
-            try:
-                # File name se year extract karein
-                year_match = re.search(r'\b(19\d{2}|20\d{2})\b', raw_caption)
-                year = year_match.group(1) if year_match else None
+    if TMDB_API_KEY:
+        try:
+            # File name se year extract karein
+            year_match = re.search(r'\b(19\d{2}|20\d{2})\b', raw_caption)
+            year = year_match.group(1) if year_match else None
 
-                # Year ke sath search
-                if year:
-                    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}&primary_release_year={year}"
-                else:
-                    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}"
+            # Year ke sath search
+            if year:
+                url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}&primary_release_year={year}"
+            else:
+                url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}"
 
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            results = data.get("results", [])
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        results = data.get("results", [])
 
-                            if not results and year:
-                                url_fallback = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}"
-                                async with session.get(url_fallback) as resp2:
-                                    if resp2.status == 200:
-                                        data2 = await resp2.json()
-                                        results = data2.get("results", [])
+                        if not results and year:
+                            url_fallback = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}"
+                            async with session.get(url_fallback) as resp2:
+                                if resp2.status == 200:
+                                    data2 = await resp2.json()
+                                    results = data2.get("results", [])
 
-                            valid_item = None
-                            for res in results:
-                                if res.get("poster_path"):
-                                    valid_item = res
-                                    break
+                        valid_item = None
+                        for res in results:
+                            if res.get("poster_path"):
+                                valid_item = res
+                                break
 
-                            if valid_item:
-                                title_display = valid_item.get("title") or valid_item.get("name") or search_title
-                                rel_date = valid_item.get("release_date") or valid_item.get("first_air_date") or "N/A"
-                                rating = valid_item.get("vote_average", "N/A")
-                                p_path = valid_item.get("poster_path")
-                                poster_url = f"https://image.tmdb.org/t/p/w342{p_path}"
+                        if valid_item:
+                            title_display = valid_item.get("title") or valid_item.get("name") or search_title
+                            rel_date = valid_item.get("release_date") or valid_item.get("first_air_date") or "N/A"
+                            rating = valid_item.get("vote_average", "N/A")
+                            p_path = valid_item.get("poster_path")
+                            poster_url = f"https://image.tmdb.org/t/p/w342{p_path}"
 
-            except Exception as e:
-                logger.error(f"TMDB Fetch Error: {e}")
+        except Exception as e:
+            logger.error(f"TMDB Fetch Error: {e}")
 
-        caption_text = (
+    caption_text = (
         f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
         f"📌 **TITLE :** {title_display}\n"
         f"📅 **RELEASE DATE :** {rel_date}\n"
