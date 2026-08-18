@@ -481,44 +481,64 @@ async def start_cmd(client, msg):
         )
 
     if data.startswith("file_"):
-        res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
-        if res:
-            title = res.get('original_title', res.get('title', 'Movie'))
-            file_name = res.get('file_name', title)
-            cap = f"📁 **{file_name}**\n\n⚠️ **Ye message 5 min mein delete ho jayega. Apne Saved Messages me forward kar lein!**"
-            
-            sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap)
-            asyncio.create_task(delete_after_delay([sf], 300))
+            res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
+            if res:
+                title = res.get('original_title', res.get('title', 'Movie'))
+                
+                # Clean Compact Caption
+                cap = (
+                    f"> **[{title}](https://t.me/Movies2026Cinema)**\n"
+                    f"> **JOIN ❤️: @Movies2026Cinema**\u200b"
+                )
 
-    elif data.startswith("all_"):
-        try:
-            b64_str = data.split("_", 1)[1]
-            b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
-            search_q = base64.urlsafe_b64encode(b64_str).decode()
-        except Exception:
-            search_q = unquote(data.split("_", 1)[1])
+                # 1. Movie File Bhejega
+                sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap)
+                
+                # 2. File aate hi turant 5-minute warning SMS aayega
+                warn_msg = await msg.reply_text(
+                    "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
+                )
 
-        results = await smart_db_search(client, search_q)
-        if not results:
-            return await msg.reply("❌ Files nahi mili!")
+                asyncio.create_task(delete_after_delay([sf, warn_msg], 300))
 
-        sts = await msg.reply(f"🔍 **Found {len(results)} files. Sending...**")
-        sent_messages = []
-        for res in results:
+        elif data.startswith("all_"):
             try:
-                cap = f"📁 **{res.get('original_title', res['title'])}**\n\n⚠️ **5 min mein delete ho jayega.**"
-                poster = res.get("poster") or res.get("poster_url")
-                if poster:
-                    m = await client.send_photo(msg.chat.id, photo=poster, caption=cap)
-                else:
-                    m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
-                sent_messages.append(m)
-                await asyncio.sleep(1.2)
-            except Exception: pass
+                b64_str = data.split("_", 1)[1]
+                b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
+                search_q = base64.urlsafe_b64decode(b64_str).decode()
+            except Exception:
+                search_q = unquote(data.split("_", 1)[1])
 
-        await sts.edit("✅ **Batch Complete!**")
-        asyncio.create_task(delete_after_delay(sent_messages + [sts], 300))
+            results = await smart_db_search(client, search_q)
+            if not results:
+                return await msg.reply("❌ Files nahi mili!")
 
+            sts = await msg.reply(f"🔍 Found {len(results)} files. Sending...")
+            sent_messages = []
+            for res in results:
+                try:
+                    title = res.get('original_title', res.get('title', 'Movie'))
+                    cap = (
+                        f"> **[{title}](https://t.me/Movies2026Cinema)**\n"
+                        f"> **JOIN ❤️: @Movies2026Cinema**\u200b"
+                    )
+                    poster = res.get("poster") or res.get("poster_url")
+                    if poster:
+                        m = await client.send_photo(msg.chat.id, photo=poster, caption=cap)
+                    else:
+                        m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
+                    sent_messages.append(m)
+                    await asyncio.sleep(1.2)
+                except Exception:
+                    pass
+
+            # Batch sending ke baad warning status message
+            warn_sts = await sts.edit(
+                "✅ **Batch Complete!**\n\n"
+                "⚠️ **DHYAN DEN:** Sabhi files 5 minute mein delete ho jayengi! Inhe turant apne **Saved Messages** mein forward kar lein."
+            )
+            asyncio.create_task(delete_after_delay(sent_messages + [warn_sts], 300))
+            
 # PM TEXT HANDLER (NON-COMMANDS)
 @app.on_message(filters.private & filters.text & ~filters.regex(r"^/"))
 async def pm_text_handler(client, msg):
