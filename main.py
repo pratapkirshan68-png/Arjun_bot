@@ -457,13 +457,14 @@ async def start_cmd(client, msg):
     except UserNotParticipant:
         invite = (await client.get_chat(FSUB_CHANNEL)).invite_link or MAIN_CHANNEL_LINK
         me = await client.get_me()
-        buttons = [[InlineKeyboardButton("📢 JOIN CHANNEL 📢", url=invite)]]
+        buttons = [[InlineKeyboardButton("📢 JOIN CHANNEL", url=invite)]]
         if data:
             try_again_link = f"https://t.me/{me.username}?start={data}"
             buttons.append([InlineKeyboardButton("🔄 TRY AGAIN / VERIFY 🔄", url=try_again_link)])
         btn = InlineKeyboardMarkup(buttons)
         return await msg.reply("❌ Pehle channel join karein!", reply_markup=btn)
-    except Exception: pass
+    except Exception:
+        pass
 
     if not data:
         group_link = MAIN_CHANNEL_LINK
@@ -480,8 +481,7 @@ async def start_cmd(client, msg):
             reply_markup=btn
         )
 
-if data.startswith("file_"):
-if data.startswith("file_"):
+    if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             title = res.get('original_title', res.get('title', 'Movie'))
