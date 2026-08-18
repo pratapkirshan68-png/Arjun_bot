@@ -744,8 +744,8 @@ if TMDB_API_KEY:
 
             except Exception as e:
                 logger.error(f"TMDB Fetch Error: {e}")
-            
-    caption_text = (
+
+        caption_text = (
         f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
         f"📌 **TITLE :** {title_display}\n"
         f"📅 **RELEASE DATE :** {rel_date}\n"
