@@ -482,12 +482,13 @@ async def start_cmd(client, msg):
         )
 
     if data.startswith("file_"):
+        from pyrogram import enums
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             raw_title = res.get('original_title', res.get('title', 'Movie'))
-            safe_title = raw_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            safe_title = str(raw_title).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             
-            # Perfect Quote Box Layout (HTML)
+            # HTML Quote Box Format
             cap = (
                 f"<blockquote><a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
                 f"<b>JOIN ❤️: @Movies2026Cinema</b></blockquote>"
@@ -505,6 +506,7 @@ async def start_cmd(client, msg):
             asyncio.create_task(delete_after_delay([sf, warn_msg], 300))
 
     elif data.startswith("all_"):
+        from pyrogram import enums
         try:
             b64_str = data.split("_", 1)[1]
             b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
@@ -521,7 +523,7 @@ async def start_cmd(client, msg):
         for res in results:
             try:
                 raw_title = res.get('original_title', res.get('title', 'Movie'))
-                safe_title = raw_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                safe_title = str(raw_title).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                 cap = (
                     f"<blockquote><a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
                     f"<b>JOIN ❤️: @Movies2026Cinema</b></blockquote>"
