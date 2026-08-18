@@ -706,11 +706,11 @@ async def add_to_db(client, msg):
 
 if TMDB_API_KEY:
             try:
-                # File name se year (jaise 2017, 2025) extract karein
+                # File name se year extract karein
                 year_match = re.search(r'\b(19\d{2}|20\d{2})\b', raw_caption)
                 year = year_match.group(1) if year_match else None
 
-                # Year ke sath TMDb movie search query
+                # Year ke sath search
                 if year:
                     url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}&primary_release_year={year}"
                 else:
@@ -722,7 +722,6 @@ if TMDB_API_KEY:
                             data = await resp.json()
                             results = data.get("results", [])
 
-                            # Agar year ke sath kuch na mile, to bina year retry karein
                             if not results and year:
                                 url_fallback = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={quote(search_title)}"
                                 async with session.get(url_fallback) as resp2:
@@ -742,8 +741,9 @@ if TMDB_API_KEY:
                                 rating = valid_item.get("vote_average", "N/A")
                                 p_path = valid_item.get("poster_path")
                                 poster_url = f"https://image.tmdb.org/t/p/w342{p_path}"
-        except Exception as e:
-            logger.error(f"TMDB Fetch Error: {e}")
+
+            except Exception as e:
+                logger.error(f"TMDB Fetch Error: {e}")
             
     caption_text = (
         f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
