@@ -675,20 +675,40 @@ async def add_to_db(client, msg):
         return
 
     raw_caption = msg.caption or file.file_name or "Unknown Movie"
-    clean_raw = re.sub(r'(?i)(S\d+|E\d+|\d+p|Hindi|Combined|Mkv|Web-DL|HDRip)', '', raw_caption)
-    search_title = clean_name(clean_raw)
 
+    # 1. Clean Movie Title Extract (DB Save aur Duplicate Check hone se pehle)
+    clean_text = raw_caption.replace('.', ' ').replace('_', ' ')
+    year_match = re.search(r'\b(19\d{2}|20\d{2})\b', clean_text)
+    year = year_match.group(1) if year_match else None
+
+    quality_pattern = r'(?i)\b(360p|420p|480p|720p|780p|1080p|1080|2160p|4k|2k|hd|hdr|web-dl|webrip|hdrip|bluray|hdtv|x264|x265|hevc|10bit|aac|ddp|esub|sub|hindi|english|mkv|mp4|avi)\b.*'
+
+    if year:
+        search_title = clean_text.split(year)[0].strip()
+    else:
+        search_title = re.sub(quality_pattern, '', clean_text).strip()
+
+    search_title = re.sub(quality_pattern, '', search_title).strip()
+    if not search_title:
+        search_title = clean_text.strip()
+
+    # 2. Database Insertion (Ab exact same clean title save hoga)
     await client.movies.insert_one({
         "title": search_title,
         "original_title": raw_caption,
         "file_id": file.file_id
     })
 
-    status_msg = await msg.reply_text(f"📁 File DB me Add ho gayi!\nClean Name: `{search_title}`\n⏳ Checking Duplicate Poster...")
+    # Aapka Status Message
+    status_msg = await msg.reply_text(f"📁 File DB me Add ho gayi!\nClean Name: `{search_title}`\n⏳ Checking Duplicate...")
 
-    already_posted = await client.movies.count_documents({"title": search_title})
+    # 3. Duplicate Check
+    already_posted = await client.movies.count_documents({
+        "title": {"$regex": f"^{re.escape(search_title)}$", "$options": "i"}
+    })
+
     if already_posted > 1:
-        await status_msg.edit_text(f"📁 File DB me Add ho gayi!\n⚠️ **Duplicate Poster Skipped:** `{search_title}` ka poster pehle se post hai.")
+        await status_msg.edit_text(f"📁 File DB me Add ho gayi!\n⚠️ **Duplicate Poster Skipped:** `{search_title}` ka poster pehle se hai.")
         return
 
     group_link = MAIN_CHANNEL_LINK
@@ -698,19 +718,6 @@ async def add_to_db(client, msg):
             group_link = search_group.invite_link or (f"https://t.me/{search_group.username}" if search_group.username else MAIN_CHANNEL_LINK)
         except Exception:
             group_link = MAIN_CHANNEL_LINK
-
-    # Clean title aur year extraction
-    clean_text = raw_caption.replace('.', ' ').replace('_', ' ')
-    year_match = re.search(r'\b(19\d{2}|20\d{2})\b', clean_text)
-    year = year_match.group(1) if year_match else None
-
-    if year:
-        search_title = clean_text.split(year)[0].strip()
-    else:
-        search_title = re.sub(r'(?i)\b(720p|1080p|2160p|4k|web-dl|webrip|hdrip|bluray|x264|x265|hevc|hindi|english|esub|mkv|mp4)\b.*', '', clean_text).strip()
-
-    if not search_title:
-        search_title = clean_text.strip()
 
     poster_url = None
     rel_date = "N/A"
