@@ -484,13 +484,21 @@ async def start_cmd(client, msg):
     if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
-            title = res.get('original_title', res.get('title', 'Movie'))
+            raw_title = res.get('original_title', res.get('title', 'Movie'))
+            safe_title = raw_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            
+            # Perfect Quote Box Layout (HTML)
             cap = (
-                f"> **[{title}](https://t.me/Movies2026Cinema)**\n"
-                f"> **JOIN ❤️: @Movies2026Cinema**\u200b"
+                f"<blockquote><a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
+                f"<b>JOIN ❤️: @Movies2026Cinema</b></blockquote>"
             )
 
-            sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap)
+            sf = await client.send_cached_media(
+                chat_id=msg.chat.id, 
+                file_id=res["file_id"], 
+                caption=cap,
+                parse_mode=enums.ParseMode.HTML
+            )
             warn_msg = await msg.reply_text(
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
@@ -512,16 +520,17 @@ async def start_cmd(client, msg):
         sent_messages = []
         for res in results:
             try:
-                title = res.get('original_title', res.get('title', 'Movie'))
+                raw_title = res.get('original_title', res.get('title', 'Movie'))
+                safe_title = raw_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                 cap = (
-                    f"> **[{title}](https://t.me/Movies2026Cinema)**\n"
-                    f"> **JOIN ❤️: @Movies2026Cinema**\u200b"
+                    f"<blockquote><a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
+                    f"<b>JOIN ❤️: @Movies2026Cinema</b></blockquote>"
                 )
                 poster = res.get("poster") or res.get("poster_url")
                 if poster:
-                    m = await client.send_photo(msg.chat.id, photo=poster, caption=cap)
+                    m = await client.send_photo(msg.chat.id, photo=poster, caption=cap, parse_mode=enums.ParseMode.HTML)
                 else:
-                    m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap)
+                    m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap, parse_mode=enums.ParseMode.HTML)
                 sent_messages.append(m)
                 await asyncio.sleep(1.2)
             except Exception:
