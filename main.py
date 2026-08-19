@@ -1,3 +1,4 @@
+from pyrogram import enums
 import os
 import io
 import re
