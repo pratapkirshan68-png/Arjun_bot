@@ -487,9 +487,10 @@ async def start_cmd(client, msg):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             raw_title = res.get('original_title', res.get('title', 'Movie'))
-            safe_title = str(raw_title).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            # Double JOIN text aur extra links saaf karne ke liye
+            clean_title = str(raw_title).split("\n")[0].split("JOIN")[0].replace("@Movies2026Cinema", "").strip()
+            safe_title = clean_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             
-            # HTML Quote Box Format
             cap = (
                 f"<blockquote><a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
                 f"<b>JOIN ❤️: @Movies2026Cinema</b></blockquote>"
@@ -505,6 +506,47 @@ async def start_cmd(client, msg):
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
             asyncio.create_task(delete_after_delay([sf, warn_msg], 300))
+
+    elif data.startswith("all_"):
+        from pyrogram import enums
+        try:
+            b64_str = data.split("_", 1)[1]
+            b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
+            search_q = base64.urlsafe_b64decode(b64_str).decode()
+        except Exception:
+            search_q = unquote(data.split("_", 1)[1])
+
+        results = await smart_db_search(client, search_q)
+        if not results:
+            return await msg.reply("❌ Files nahi mili!")
+
+        sts = await msg.reply(f"🔍 Found {len(results)} files. Sending...")
+        sent_messages = []
+        for res in results:
+            try:
+                raw_title = res.get('original_title', res.get('title', 'Movie'))
+                clean_title = str(raw_title).split("\n")[0].split("JOIN")[0].replace("@Movies2026Cinema", "").strip()
+                safe_title = clean_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                
+                cap = (
+                    f"<blockquote><a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
+                    f"<b>JOIN ❤️: @Movies2026Cinema</b></blockquote>"
+                )
+                poster = res.get("poster") or res.get("poster_url")
+                if poster:
+                    m = await client.send_photo(msg.chat.id, photo=poster, caption=cap, parse_mode=enums.ParseMode.HTML)
+                else:
+                    m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap, parse_mode=enums.ParseMode.HTML)
+                sent_messages.append(m)
+                await asyncio.sleep(1.2)
+            except Exception:
+                pass
+
+        warn_sts = await sts.edit(
+            "✅ **Batch Complete!**\n\n"
+            "⚠️ **DHYAN DEN:** Sabhi files 5 minute mein delete ho jayengi! Inhe turant apne **Saved Messages** mein forward kar lein."
+        )
+        asyncio.create_task(delete_after_delay(sent_messages + [warn_sts], 300))
 
     elif data.startswith("all_"):
         from pyrogram import enums
