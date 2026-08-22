@@ -731,7 +731,8 @@ async def add_to_db(client, msg):
     year_match = re.search(r'\b(19\d{2}|20\d{2})\b', clean_text)
     year = year_match.group(1) if year_match else None
 
-quality_pattern = r'(?i)\(.*?\)|\[.*?\]|\b(s\d+|e\d+|s\d+combined|s\d+complete|season\s*\d+|episode\s*\d+|combined|complete|part\s*\d+|360p|480p|720p|1080p|1080|2160p|4k|2k|hd|hdr|web-?dl|webrip|hdrip|bluray|hdtv|dvdrip|cam|hindi|tam|tel|eng|dual|multi|esub|sub|aac|ddp5?\.1|mkv|mp4|avi)\b.*'
+    quality_pattern = r'(?i)\(.*?\)|\[.*?\]|\b(s\d+|e\d+|s\d+combined|s\d+complete|season\s*\d+|episode\s*\d+|combined|complete|part\s*\d+|360p|480p|720p|1080p|1080|2160p|4k|2k|hd|hdr|web-?dl|webrip|hdrip|bluray|hdtv|dvdrip|cam|hindi|tam|tel|eng|dual|multi|esub|sub|aac|ddp5?\.1|mkv|mp4|avi)\b.*'
+
     if year:
         search_title = clean_text.split(year)[0].strip()
     else:
