@@ -512,7 +512,6 @@ async def start_cmd(client, msg):
         )
 
     if data.startswith("file_"):
-    if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             raw_title = res.get('original_title', res.get('title', 'Movie'))
