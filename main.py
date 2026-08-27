@@ -15,6 +15,7 @@ from bson.objectid import ObjectId
 from aiohttp import web
 from urllib.parse import quote, unquote
 from fuzzywuzzy import fuzz
+from pyrogram.types import InputMediaPhoto, InputMediaDocument
 
 # ================= CONFIGURATION =================
 def get_clean_var(key, default=""):
@@ -516,22 +517,38 @@ async def start_cmd(client, msg):
             raw_title = res.get('original_title', res.get('title', 'Movie'))
             clean_title = str(raw_title).split("\n")[0].split("JOIN")[0].replace("@Movies2026Cinema", "").strip()
             safe_title = clean_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            
+
             cap = (
                 f"<blockquote><a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
                 f"<b>JOIN ❤️: @Movies2026Cinema</b></blockquote>"
             )
 
-            sf = await client.send_cached_media(
-                chat_id=msg.chat.id, 
-                file_id=res["file_id"], 
-                caption=cap,
-                parse_mode=enums.ParseMode.HTML
-            )
+            poster_url = res.get("poster") or res.get("poster_url")
+            if not poster_url and TMDB_API_KEY:
+                poster_url = await get_poster(clean_title)
+
+            thumb_url = poster_url.replace('/w500/', '/w185/').replace('/original/', '/w185/') if poster_url else None
+
+            sent_msgs = []
+            try:
+                if thumb_url:
+                    media_list = [
+                        InputMediaPhoto(media=thumb_url, caption=cap, parse_mode=enums.ParseMode.HTML),
+                        InputMediaDocument(media=res["file_id"])
+                    ]
+                    sent_msgs = await client.send_media_group(chat_id=msg.chat.id, media=media_list)
+                else:
+                    sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap, parse_mode=enums.ParseMode.HTML)
+                    sent_msgs.append(sf)
+            except Exception:
+                sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap, parse_mode=enums.ParseMode.HTML)
+                sent_msgs.append(sf)
+
             warn_msg = await msg.reply_text(
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
-            asyncio.create_task(delete_after_delay([sf, warn_msg], 300))
+            sent_msgs.append(warn_msg)
+            asyncio.create_task(delete_after_delay(sent_msgs, 300))
 
     elif data.startswith("all_"):
         try:
