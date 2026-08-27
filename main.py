@@ -512,6 +512,7 @@ async def start_cmd(client, msg):
         )
 
     if data.startswith("file_"):
+    if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             raw_title = res.get('original_title', res.get('title', 'Movie'))
@@ -523,6 +524,7 @@ async def start_cmd(client, msg):
 
             safe_title = clean_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
+            # Movie Title Link (Is par click karne se channel khulega aur forward par sath jayega)
             file_caption = (
                 f"🎬 <a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
                 f"<b>JOIN ❤️: @Movies2026Cinema</b>"
@@ -532,41 +534,36 @@ async def start_cmd(client, msg):
             if not poster_url and TMDB_API_KEY:
                 poster_url = await get_poster(clean_title)
 
-            # 1. Chhota 20KB ka poster temporary download karein
-            thumb_path = None
+            # Compact Size Poster URL
             if poster_url:
-                try:
-                    thumb_url = poster_url.replace('/w500/', '/w300/').replace('/original/', '/w300/')
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(thumb_url) as resp:
-                            if resp.status == 200:
-                                thumb_path = f"thumb_{msg.from_user.id}.jpg"
-                                with open(thumb_path, 'wb') as f:
-                                    f.write(await resp.read())
-                except Exception:
-                    thumb_path = None
+                poster_url = poster_url.replace('/w500/', '/w300/').replace('/original/', '/w300/')
 
             sent_msgs = []
+
+            # 1. Poster Photo Bhejo
+            if poster_url:
+                try:
+                    p_msg = await client.send_photo(
+                        chat_id=msg.chat.id,
+                        photo=poster_url
+                    )
+                    sent_msgs.append(p_msg)
+                except Exception:
+                    pass
+
+            # 2. Main Video File Bhejo (Title Link ke sath)
             try:
-                # 2. Album banakar bheje (Photo aur File ek sath)
-                if thumb_path:
-                    media_group = [
-                        InputMediaPhoto(media=thumb_path),
-                        InputMediaDocument(media=res["file_id"], caption=file_caption, parse_mode=enums.ParseMode.HTML)
-                    ]
-                    msgs = await client.send_media_group(chat_id=msg.chat.id, media=media_group)
-                    sent_msgs.extend(msgs)
-                else:
-                    sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=file_caption, parse_mode=enums.ParseMode.HTML)
-                    sent_msgs.append(sf)
-            except Exception:
-                sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=file_caption, parse_mode=enums.ParseMode.HTML)
+                sf = await client.send_cached_media(
+                    chat_id=msg.chat.id, 
+                    file_id=res["file_id"], 
+                    caption=file_caption, 
+                    parse_mode=enums.ParseMode.HTML
+                )
                 sent_msgs.append(sf)
+            except Exception:
+                pass
 
-            # 3. Temp poster ko delete kar dein (Render memory bachane ke liye)
-            if thumb_path and os.path.exists(thumb_path):
-                os.remove(thumb_path)
-
+            # 3. Auto-delete Warning Message
             warn_msg = await msg.reply_text(
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
