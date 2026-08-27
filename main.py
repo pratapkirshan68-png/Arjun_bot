@@ -523,9 +523,10 @@ async def start_cmd(client, msg):
 
             safe_title = clean_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
-            cap = (
-                f"<blockquote><a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
-                f"<b>JOIN ❤️: @Movies2026Cinema</b></blockquote>"
+            # File ke sath chipakne wala caption
+            file_caption = (
+                f"🎬 <b>{safe_title}</b>\n"
+                f"<b>JOIN ❤️: @Movies2026Cinema</b>"
             )
 
             poster_url = res.get("poster") or res.get("poster_url")
@@ -534,38 +535,36 @@ async def start_cmd(client, msg):
 
             sent_msgs = []
 
-            # 1. Pehle HD Poster Photo bhejo
+            # 1. Poster Photo (Bina caption ke, taaki chota dikhe)
             if poster_url:
                 try:
                     p_msg = await client.send_photo(
                         chat_id=msg.chat.id,
-                        photo=poster_url,
-                        caption=cap,
-                        parse_mode=enums.ParseMode.HTML
+                        photo=poster_url
                     )
                     sent_msgs.append(p_msg)
                 except Exception:
                     pass
 
-            # 2. Uske saath Video File bhejo
+            # 2. Main Video File (Caption ISI PAR RAHEGA taaki Forward me sath jaye)
             try:
                 sf = await client.send_cached_media(
                     chat_id=msg.chat.id, 
                     file_id=res["file_id"], 
-                    caption=None if poster_url else cap, 
+                    caption=file_caption, 
                     parse_mode=enums.ParseMode.HTML
                 )
                 sent_msgs.append(sf)
             except Exception:
                 pass
 
-            # 3. Warning Message
+            # 3. Auto-delete Warning Message
             warn_msg = await msg.reply_text(
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
             sent_msgs.append(warn_msg)
             asyncio.create_task(delete_after_delay(sent_msgs, 300))
-
+            
     elif data.startswith("all_"):
         try:
             b64_str = data.split("_", 1)[1]
