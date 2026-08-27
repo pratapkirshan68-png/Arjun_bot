@@ -532,11 +532,11 @@ async def start_cmd(client, msg):
             if not poster_url and TMDB_API_KEY:
                 poster_url = await get_poster(clean_title)
 
-            # 1. Sirf 20 KB ki poster image temp download karein thumbnail ke liye
+            # 1. Chhota 20KB ka poster temporary download karein
             thumb_path = None
             if poster_url:
                 try:
-                    thumb_url = poster_url.replace('/w500/', '/w185/').replace('/original/', '/w185/')
+                    thumb_url = poster_url.replace('/w500/', '/w300/').replace('/original/', '/w300/')
                     async with aiohttp.ClientSession() as session:
                         async with session.get(thumb_url) as resp:
                             if resp.status == 200:
@@ -548,29 +548,25 @@ async def start_cmd(client, msg):
 
             sent_msgs = []
             try:
-                # 2. Direct File par Thumbnail chipka kar bhejo
-                sf = await client.send_document(
-                    chat_id=msg.chat.id,
-                    document=res["file_id"],
-                    thumb=thumb_path,
-                    caption=file_caption,
-                    parse_mode=enums.ParseMode.HTML
-                )
-                sent_msgs.append(sf)
+                # 2. Album banakar bheje (Photo aur File ek sath)
+                if thumb_path:
+                    media_group = [
+                        InputMediaPhoto(media=thumb_path),
+                        InputMediaDocument(media=res["file_id"], caption=file_caption, parse_mode=enums.ParseMode.HTML)
+                    ]
+                    msgs = await client.send_media_group(chat_id=msg.chat.id, media=media_group)
+                    sent_msgs.extend(msgs)
+                else:
+                    sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=file_caption, parse_mode=enums.ParseMode.HTML)
+                    sent_msgs.append(sf)
             except Exception:
-                sf = await client.send_cached_media(
-                    chat_id=msg.chat.id, 
-                    file_id=res["file_id"], 
-                    caption=file_caption, 
-                    parse_mode=enums.ParseMode.HTML
-                )
+                sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=file_caption, parse_mode=enums.ParseMode.HTML)
                 sent_msgs.append(sf)
 
-            # Temp thumbnail cleanup
+            # 3. Temp poster ko delete kar dein (Render memory bachane ke liye)
             if thumb_path and os.path.exists(thumb_path):
                 os.remove(thumb_path)
 
-            # 3. Warning message
             warn_msg = await msg.reply_text(
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
