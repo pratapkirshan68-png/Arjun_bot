@@ -515,7 +515,12 @@ async def start_cmd(client, msg):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
             raw_title = res.get('original_title', res.get('title', 'Movie'))
-            clean_title = str(raw_title).split("\n")[0].split("JOIN")[0].replace("@Movies2026Cinema", "").strip()
+            clean_text = str(raw_title).replace('.', ' ').replace('_', ' ')
+            quality_pattern = r'(?i)\(.*?\)|\[.*?\]|\b(s\d+|e\d+|s\d+combined|s\d+complete|season\s*\d+|episode\s*\d+|combined|complete|part\s*\d+|360p|480p|720p|1080p|1080|2160p|4k|2k|hd|hdr|web-?dl|webrip|hdrip|bluray|hdtv|dvdrip|cam|uncut|hindi|tam|tel|eng|dual|multi|esub|sub|aac|ddp5?\.1|mkv|mp4|avi)\b.*'
+            clean_title = re.sub(quality_pattern, '', clean_text).strip()
+            if not clean_title:
+                clean_title = clean_text.strip()
+
             safe_title = clean_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
             cap = (
@@ -527,23 +532,34 @@ async def start_cmd(client, msg):
             if not poster_url and TMDB_API_KEY:
                 poster_url = await get_poster(clean_title)
 
-            thumb_url = poster_url.replace('/w500/', '/w185/').replace('/original/', '/w185/') if poster_url else None
-
             sent_msgs = []
-            try:
-                if thumb_url:
-                    media_list = [
-                        InputMediaPhoto(media=thumb_url, caption=cap, parse_mode=enums.ParseMode.HTML),
-                        InputMediaDocument(media=res["file_id"])
-                    ]
-                    sent_msgs = await client.send_media_group(chat_id=msg.chat.id, media=media_list)
-                else:
-                    sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap, parse_mode=enums.ParseMode.HTML)
-                    sent_msgs.append(sf)
-            except Exception:
-                sf = await client.send_cached_media(chat_id=msg.chat.id, file_id=res["file_id"], caption=cap, parse_mode=enums.ParseMode.HTML)
-                sent_msgs.append(sf)
 
+            # 1. Pehle HD Poster Photo bhejo
+            if poster_url:
+                try:
+                    p_msg = await client.send_photo(
+                        chat_id=msg.chat.id,
+                        photo=poster_url,
+                        caption=cap,
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                    sent_msgs.append(p_msg)
+                except Exception:
+                    pass
+
+            # 2. Uske saath Video File bhejo
+            try:
+                sf = await client.send_cached_media(
+                    chat_id=msg.chat.id, 
+                    file_id=res["file_id"], 
+                    caption=None if poster_url else cap, 
+                    parse_mode=enums.ParseMode.HTML
+                )
+                sent_msgs.append(sf)
+            except Exception:
+                pass
+
+            # 3. Warning Message
             warn_msg = await msg.reply_text(
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
