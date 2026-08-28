@@ -583,7 +583,7 @@ async def start_cmd(client, msg):
 
         asyncio.create_task(delete_after_delay(sent_msgs, 300))
 
-        elif data.startswith("all_"):
+    elif data.startswith("all_"):
         try:
             # Query nikalna (base64 ya plain text decode karna)
                 raw_query = data.split("all_", 1)[1]
