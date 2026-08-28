@@ -48,7 +48,7 @@ MAIN_CHANNEL_LINK = get_clean_var("MAIN_CHANNEL_LINK", "https://t.me/Movies2026C
 SHORT_DOMAIN = get_clean_var("SHORT_DOMAIN", "arolinks.com")
 SHORT_API_KEY = get_clean_var("SHORT_API_KEY", "")
 
-SHORTLINK_ENABLED = True 
+SHORTLINK_ENABLED = False
 PAGE_SIZE = 6 
 
 logging.basicConfig(level=logging.INFO)
