@@ -16,7 +16,7 @@ from aiohttp import web
 from urllib.parse import quote, unquote
 from fuzzywuzzy import fuzz
 from pyrogram.types import InputMediaPhoto, InputMediaDocument
-DEFAULT_POSTER = "https://i.postimg.cc/s20K7Xw4/d8d09b93-901d-4732-8302-b9d124ed6a71.png"
+DEFAULT_POSTER = "https://i.postimg.cc/sfHpDXTg/Screenshot-20260102-140315.jpg"
 
 # ================= CONFIGURATION =================
 def get_clean_var(key, default=""):
