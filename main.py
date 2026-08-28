@@ -580,6 +580,42 @@ async def start_cmd(client, msg):
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
             sent_msgs.append(warn_msg)
+
+            elif data.startswith("all_"):
+            try:
+                # Query nikalna (base64 ya plain text decode karna)
+                raw_query = data.split("all_", 1)[1]
+                try:
+                    import base64
+                    query = base64.urlsafe_b64decode(raw_query.encode('ascii') + b'==').decode('utf-8')
+                except:
+                    query = raw_query.replace("_", " ")
+
+                sw = await msg.reply("⏳ **Saari files bhej raha hoon, thoda wait karein...**")
+                
+                # Database me search karna
+                results = await asyncio.wait_for(smart_db_search(client, query), timeout=5.0)
+                
+                if not results:
+                    return await sw.edit("❌ Mujhe ye movie database me nahi mili.")
+                
+                # Sabhi files ko ek ek karke loop me bhejna
+                for res in results:
+                    try:
+                        await client.send_cached_media(
+                            chat_id=msg.chat.id,
+                            file_id=res["file_id"],
+                            caption=f"🎬 **{res.get('file_name', res.get('title', 'Movie'))}**\n\n❤️ **Join:** @Movies2026Cinema"
+                        )
+                        await asyncio.sleep(0.5) # Telegram flood block se bachne ke liye
+                    except Exception as e:
+                        pass
+                
+                await sw.delete()
+                
+            except Exception as e:
+                print(f"Get All Files Error: {e}")
+                await msg.reply("❌ Kuch error aayi hai files nikalne me.")
             
             asyncio.create_task(delete_after_delay(sent_msgs, 300))
             
