@@ -615,7 +615,7 @@ async def start_cmd(client, msg):
                 
                 await sw.delete()
                 
-                 except Exception as e:
+               except Exception as e:
                 print(f"Get All Files Error: {e}")
                 await msg.reply("❌ Kuch error aayi hai files nikalne me.")
             
