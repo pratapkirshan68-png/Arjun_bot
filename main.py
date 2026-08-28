@@ -576,14 +576,16 @@ async def start_cmd(client, msg):
                 print(f"File Send Error: {e}")
 
             # 3. Auto-delete Warning Message (5 minutes)
-            warn_msg = await msg.reply_text(
-                "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
-            )
-            sent_msgs.append(warn_msg)
+        warn_msg = await msg.reply_text(
+            "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya..."
+        )
+        sent_msgs.append(warn_msg)
 
-            elif data.startswith("all_"):
-            try:
-                # Query nikalna (base64 ya plain text decode karna)
+        asyncio.create_task(delete_after_delay(sent_msgs, 300))
+
+        elif data.startswith("all_"):
+        try:
+            # Query nikalna (base64 ya plain text decode karna)
                 raw_query = data.split("all_", 1)[1]
                 try:
                     import base64
