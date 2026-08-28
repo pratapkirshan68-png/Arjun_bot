@@ -514,54 +514,33 @@ async def start_cmd(client, msg):
     if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
-            # File ka original lamba naam nikalna
+            # Original lamba naam display ke liye
             raw_title = res.get('file_name') or res.get('original_title') or res.get('title', 'Movie')
-            clean_text = str(raw_title).replace('.', ' ').replace('_', ' ')
             
-            # TMDB poster nikalne ke liye naam ko chhota (clean) karna
-            quality_pattern = r'(?i)\(.*?\)|\[.*?\]|\b(19\d{2}|20\d{2})\b.*|\b(s\d+|e\d+|season|episode|360p|480p|720p|1080p|2160p|4k|mkv|mp4|avi|hd|webdl|uncut|dual|hindi)\b.*'
+            # TMDB ke liye clean text banana (Bracket hatayenge par SAAL/YEAR nahi hatayenge)
+            clean_text = str(raw_title).replace('.', ' ').replace('_', ' ').replace('(', '').replace(')', '').replace('[', '').replace(']', '')
+            
+            # Yahan se humne 19xx aur 20xx (Year) hatane wala code nikal diya hai
+            quality_pattern = r'(?i)\b(s\d+|e\d+|season|episode|360p|480p|720p|1080p|2160p|4k|mkv|mp4|avi|hd|webdl|web-dl|uncut|dual|hindi|bluray|x264|hevc)\b.*'
+            
             clean_title = re.sub(quality_pattern, '', clean_text).strip()
             if not clean_title:
                 clean_title = clean_text.strip()
 
-            # BHEJNE KE LIYE: Original lamba naam use karna taaki aage peeche ka kuch delete na ho
+            # BHEJNE KE LIYE original naam (Taki caption mast dikhe)
             display_title = str(raw_title).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
-            # Ab caption me pura display_title aayega
             file_caption = (
                 f"🎬 <a href='https://t.me/Movies2026Cinema'><b>{display_title}</b></a>\n"
                 f"<b>JOIN ❤️: @Movies2026Cinema</b>"
             )
 
-            poster_url = res.get("poster") or res.get("poster_url")
-            if not poster_url and TMDB_API_KEY:
-                poster_url = await get_poster(clean_title)
-
-            # --- Baki ka aapka niche ka code same rahega (sent_msgs = [] wala) ---
             sent_msgs = []
             
-            # 1. Poster bhejane ka 100% fail-proof tareeka (Download & Send)
-            if poster_url:
-                poster_path = f"poster_{msg.from_user.id}.jpg"
-                try:
-                    thumb_url = poster_url.replace('/w500/', '/w300/').replace('/original/', '/w300/')
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(thumb_url) as resp:
-                            if resp.status == 200:
-                                with open(poster_path, 'wb') as f:
-                                    f.write(await resp.read())
-                    
-                    # Local image file bhejne se Telegram error nahi dega
-                    p_msg = await client.send_photo(chat_id=msg.chat.id, photo=poster_path)
-                    sent_msgs.append(p_msg)
-                except Exception as e:
-                    print(f"Poster Error: {e}")
-                finally:
-                    # Bhejne ke turant baad server se delete (Memory safe)
-                    if os.path.exists(poster_path):
-                        os.remove(poster_path)
+            # --- ALAG SE POSTER BHEJNE WALA CODE YAHAN SE HATA DIYA GAYA HAI ---
+            # Taaki aapko double-double message na aaye aur chat clean rahe.
 
-            # 2. Main Video File (Clickable Title ke sath)
+            # Main Video File Bhejna
             try:
                 sf = await client.send_cached_media(
                     chat_id=msg.chat.id, 
@@ -570,14 +549,16 @@ async def start_cmd(client, msg):
                     parse_mode=enums.ParseMode.HTML
                 )
                 sent_msgs.append(sf)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"File Send Error: {e}")
 
-            # 3. Warning Message
+            # Auto-delete Warning Message
             warn_msg = await msg.reply_text(
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
             sent_msgs.append(warn_msg)
+            
+            # Messages ko 5 minute (300 seconds) me delete karna
             asyncio.create_task(delete_after_delay(sent_msgs, 300))
             
 @app.on_message(filters.private & filters.text & ~filters.regex(r"^/"))
