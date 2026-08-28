@@ -514,19 +514,22 @@ async def start_cmd(client, msg):
     if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
-            raw_title = res.get('original_title', res.get('title', 'Movie'))
+            # File ka original lamba naam nikalna
+            raw_title = res.get('file_name') or res.get('original_title') or res.get('title', 'Movie')
             clean_text = str(raw_title).replace('.', ' ').replace('_', ' ')
             
-            # Yahan par 19xx aur 20xx saal (jaise 2026) hatane ka naya filter add kiya hai
+            # TMDB poster nikalne ke liye naam ko chhota (clean) karna
             quality_pattern = r'(?i)\(.*?\)|\[.*?\]|\b(19\d{2}|20\d{2})\b.*|\b(s\d+|e\d+|season|episode|360p|480p|720p|1080p|2160p|4k|mkv|mp4|avi|hd|webdl|uncut|dual|hindi)\b.*'
             clean_title = re.sub(quality_pattern, '', clean_text).strip()
             if not clean_title:
                 clean_title = clean_text.strip()
 
-            safe_title = clean_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            # BHEJNE KE LIYE: Original lamba naam use karna taaki aage peeche ka kuch delete na ho
+            display_title = str(raw_title).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
+            # Ab caption me pura display_title aayega
             file_caption = (
-                f"🎬 <a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
+                f"🎬 <a href='https://t.me/Movies2026Cinema'><b>{display_title}</b></a>\n"
                 f"<b>JOIN ❤️: @Movies2026Cinema</b>"
             )
 
@@ -534,6 +537,7 @@ async def start_cmd(client, msg):
             if not poster_url and TMDB_API_KEY:
                 poster_url = await get_poster(clean_title)
 
+            # --- Baki ka aapka niche ka code same rahega (sent_msgs = [] wala) ---
             sent_msgs = []
             
             # 1. Poster bhejane ka 100% fail-proof tareeka (Download & Send)
