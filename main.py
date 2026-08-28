@@ -614,12 +614,10 @@ async def start_cmd(client, msg):
                         pass
                 
                 await sw.delete()
-                
-               except Exception as e:
-                print(f"Get All Files Error: {e}")
-                await msg.reply("❌ Kuch error aayi hai files nikalne me.")
             
-            asyncio.create_task(delete_after_delay(sent_msgs, 300))
+        except Exception as e:
+            print(f"Get All Files Error: {e}")
+            await msg.reply("❌ Kuch error aayi hai files nikalne me.")
             
 @app.on_message(filters.private & filters.text & ~filters.regex(r"^/"))
 async def pm_text_handler(client, msg):
