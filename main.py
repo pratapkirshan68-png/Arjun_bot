@@ -514,20 +514,17 @@ async def start_cmd(client, msg):
     if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
-            # Original lamba naam display ke liye
+            # Full original title caption me dikhane ke liye
             raw_title = res.get('file_name') or res.get('original_title') or res.get('title', 'Movie')
             
-            # TMDB ke liye clean text banana (Bracket hatayenge par SAAL/YEAR nahi hatayenge)
+            # TMDB search ke liye title clean karna (brackets hatayenge par YEAR bacha kar rakhenge)
             clean_text = str(raw_title).replace('.', ' ').replace('_', ' ').replace('(', '').replace(')', '').replace('[', '').replace(']', '')
             
-            # Yahan se humne 19xx aur 20xx (Year) hatane wala code nikal diya hai
             quality_pattern = r'(?i)\b(s\d+|e\d+|season|episode|360p|480p|720p|1080p|2160p|4k|mkv|mp4|avi|hd|webdl|web-dl|uncut|dual|hindi|bluray|x264|hevc)\b.*'
-            
             clean_title = re.sub(quality_pattern, '', clean_text).strip()
             if not clean_title:
                 clean_title = clean_text.strip()
 
-            # BHEJNE KE LIYE original naam (Taki caption mast dikhe)
             display_title = str(raw_title).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
             file_caption = (
@@ -535,12 +532,37 @@ async def start_cmd(client, msg):
                 f"<b>JOIN ❤️: @Movies2026Cinema</b>"
             )
 
+            # Poster dhoondna
+            poster_url = res.get("poster") or res.get("poster_url")
+            if not poster_url and TMDB_API_KEY:
+                poster_url = await get_poster(clean_title)
+
+            # Agar TMDB se poster na mile, toh aapka brand poster set ho jaye
+            if not poster_url:
+                poster_url = DEFAULT_POSTER
+
             sent_msgs = []
             
-            # --- ALAG SE POSTER BHEJNE WALA CODE YAHAN SE HATA DIYA GAYA HAI ---
-            # Taaki aapko double-double message na aaye aur chat clean rahe.
+            # 1. Poster bhejna (Download & Send technique se taaki Telegram fail na ho)
+            if poster_url:
+                poster_path = f"poster_{msg.from_user.id}.jpg"
+                try:
+                    thumb_url = poster_url.replace('/w500/', '/w300/').replace('/original/', '/w300/')
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(thumb_url) as resp:
+                            if resp.status == 200:
+                                with open(poster_path, 'wb') as f:
+                                    f.write(await resp.read())
+                    
+                    p_msg = await client.send_photo(chat_id=msg.chat.id, photo=poster_path)
+                    sent_msgs.append(p_msg)
+                except Exception as e:
+                    print(f"Poster Error: {e}")
+                finally:
+                    if os.path.exists(poster_path):
+                        os.remove(poster_path)
 
-            # Main Video File Bhejna
+            # 2. Main Movie File
             try:
                 sf = await client.send_cached_media(
                     chat_id=msg.chat.id, 
@@ -552,13 +574,12 @@ async def start_cmd(client, msg):
             except Exception as e:
                 print(f"File Send Error: {e}")
 
-            # Auto-delete Warning Message
+            # 3. Auto-delete Warning Message (5 minutes)
             warn_msg = await msg.reply_text(
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
             sent_msgs.append(warn_msg)
             
-            # Messages ko 5 minute (300 seconds) me delete karna
             asyncio.create_task(delete_after_delay(sent_msgs, 300))
             
 @app.on_message(filters.private & filters.text & ~filters.regex(r"^/"))
