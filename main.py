@@ -516,14 +516,15 @@ async def start_cmd(client, msg):
         if res:
             raw_title = res.get('original_title', res.get('title', 'Movie'))
             clean_text = str(raw_title).replace('.', ' ').replace('_', ' ')
-            quality_pattern = r'(?i)\(.*?\)|\[.*?\]|\b(s\d+|e\d+|s\d+combined|s\d+complete|season\s*\d+|episode\s*\d+|combined|complete|part\s*\d+|360p|480p|720p|1080p|1080|2160p|4k|2k|hd|hdr|web-?dl|webrip|hdrip|bluray|hdtv|dvdrip|cam|uncut|hindi|tam|tel|eng|dual|multi|esub|sub|aac|ddp5?\.1|mkv|mp4|avi)\b.*'
+            
+            # Yahan par 19xx aur 20xx saal (jaise 2026) hatane ka naya filter add kiya hai
+            quality_pattern = r'(?i)\(.*?\)|\[.*?\]|\b(19\d{2}|20\d{2})\b.*|\b(s\d+|e\d+|season|episode|360p|480p|720p|1080p|2160p|4k|mkv|mp4|avi|hd|webdl|uncut|dual|hindi)\b.*'
             clean_title = re.sub(quality_pattern, '', clean_text).strip()
             if not clean_title:
                 clean_title = clean_text.strip()
 
             safe_title = clean_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
-            # Movie Title Link (Is par click karne se channel khulega aur forward par sath jayega)
             file_caption = (
                 f"🎬 <a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
                 f"<b>JOIN ❤️: @Movies2026Cinema</b>"
@@ -533,24 +534,30 @@ async def start_cmd(client, msg):
             if not poster_url and TMDB_API_KEY:
                 poster_url = await get_poster(clean_title)
 
-            # Compact Size Poster URL
-            if poster_url:
-                poster_url = poster_url.replace('/w500/', '/w300/').replace('/original/', '/w300/')
-
             sent_msgs = []
-
-            # 1. Poster Photo Bhejo
+            
+            # 1. Poster bhejane ka 100% fail-proof tareeka (Download & Send)
             if poster_url:
+                poster_path = f"poster_{msg.from_user.id}.jpg"
                 try:
-                    p_msg = await client.send_photo(
-                        chat_id=msg.chat.id,
-                        photo=poster_url
-                    )
+                    thumb_url = poster_url.replace('/w500/', '/w300/').replace('/original/', '/w300/')
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(thumb_url) as resp:
+                            if resp.status == 200:
+                                with open(poster_path, 'wb') as f:
+                                    f.write(await resp.read())
+                    
+                    # Local image file bhejne se Telegram error nahi dega
+                    p_msg = await client.send_photo(chat_id=msg.chat.id, photo=poster_path)
                     sent_msgs.append(p_msg)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"Poster Error: {e}")
+                finally:
+                    # Bhejne ke turant baad server se delete (Memory safe)
+                    if os.path.exists(poster_path):
+                        os.remove(poster_path)
 
-            # 2. Main Video File Bhejo (Title Link ke sath)
+            # 2. Main Video File (Clickable Title ke sath)
             try:
                 sf = await client.send_cached_media(
                     chat_id=msg.chat.id, 
@@ -562,52 +569,12 @@ async def start_cmd(client, msg):
             except Exception:
                 pass
 
-            # 3. Auto-delete Warning Message
+            # 3. Warning Message
             warn_msg = await msg.reply_text(
                 "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya kisi doosri jagah **Forward** karke rakh lein, ye 5 minute mein delete ho jayegi!"
             )
             sent_msgs.append(warn_msg)
             asyncio.create_task(delete_after_delay(sent_msgs, 300))
-            
-    elif data.startswith("all_"):
-        try:
-            b64_str = data.split("_", 1)[1]
-            b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
-            search_q = base64.urlsafe_b64decode(b64_str).decode()
-        except Exception:
-            search_q = unquote(data.split("_", 1)[1])
-
-        results = await smart_db_search(client, search_q)
-        if not results:
-            return await msg.reply("❌ Files nahi mili!")
-
-        sts = await msg.reply(f"🔍 Found {len(results)} files. Sending...")
-        sent_messages = []
-        for res in results:
-            try:
-                raw_title = res.get('original_title', res.get('title', 'Movie'))
-                clean_title = str(raw_title).split("\n")[0].split("JOIN")[0].replace("@Movies2026Cinema", "").strip()
-                safe_title = clean_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                
-                cap = (
-                    f"<blockquote><a href='https://t.me/Movies2026Cinema'><b>{safe_title}</b></a>\n"
-                    f"<b>JOIN ❤️: @Movies2026Cinema</b></blockquote>"
-                )
-                poster = res.get("poster") or res.get("poster_url")
-                if poster:
-                    m = await client.send_photo(msg.chat.id, photo=poster, caption=cap, parse_mode=enums.ParseMode.HTML)
-                else:
-                    m = await client.send_cached_media(msg.chat.id, res["file_id"], caption=cap, parse_mode=enums.ParseMode.HTML)
-                sent_messages.append(m)
-                await asyncio.sleep(1.2)
-            except Exception:
-                pass
-
-        warn_sts = await sts.edit(
-            "✅ **Batch Complete!**\n\n"
-            "⚠️ **DHYAN DEN:** Sabhi files 5 minute mein delete ho jayengi! Inhe turant apne **Saved Messages** mein forward kar lein."
-        )
-        asyncio.create_task(delete_after_delay(sent_messages + [warn_sts], 300))
             
 @app.on_message(filters.private & filters.text & ~filters.regex(r"^/"))
 async def pm_text_handler(client, msg):
