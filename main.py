@@ -766,6 +766,7 @@ async def search_movie(client, msg):
     except Exception as e:
         logger.error(f"Search Final Error: {e}")
 
+# ================= FIXED ADD TO DB HANDLER =================
 @app.on_message(filters.chat(STORAGE_CHANNEL) & (filters.video | filters.document | filters.forwarded))
 async def add_to_db(client, msg):
     file = msg.video or msg.document
@@ -789,20 +790,25 @@ async def add_to_db(client, msg):
     if not search_title:
         search_title = clean_text.strip()
 
+    # 1. MongoDB me file save karna
     await client.movies.insert_one({
         "title": search_title,
         "original_title": raw_caption,
         "file_id": file.file_id
     })
 
-    status_msg = await msg.reply_text(f"📁 File DB me Add ho gayi!\nClean Name: `{search_title}`\n⏳ Checking Duplicate...")
+    status_msg = await msg.reply_text(f"📁 File DB me Add ho gayi!\nClean Name: `{search_title}`")
 
-    already_posted = await client.movies.count_documents({
-        "title": {"$regex": f"^{re.escape(search_title)}$", "$options": "i"}
-    })
+    # 2. ATOMIC LOCKING: Duplicate Poster check karna
+    poster_track = await client.posted_posters.find_one_and_update(
+        {"title": search_title.lower()},
+        {"$setOnInsert": {"title": search_title.lower(), "created_at": datetime.now()}},
+        upsert=True,
+        return_document=False
+    )
 
-    if already_posted > 1:
-        await status_msg.edit_text(f"📁 File DB me Add ho gayi!\n⚠️ **Duplicate Poster Skipped:** `{search_title}` ka poster pehle se hai.")
+    if poster_track is not None:
+        await status_msg.edit_text(f"📁 File DB me Add ho gayi!\nℹ️ **File saved:** `{search_title}` (Poster pehle se channel me post hai).")
         return
 
     group_link = MAIN_CHANNEL_LINK
