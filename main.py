@@ -70,6 +70,7 @@ class MovieBot(Client):
             self.movies = db["movies"]
             self.requests = db["movie_requests"]
             self.users = db["users"]
+            self.posted_posters = db["posted_posters"]
             print("✅ MongoDB Connected Successfully!")
         except Exception as e:
             print(f"❌ MongoDB Connection Error: {e}")
