@@ -824,6 +824,23 @@ async def add_to_db(client, msg):
     rating = "N/A"
     title_display = search_title
 
+    # === QUALITY, AUDIO & GENRE PARSING ===
+    qualities = re.findall(r'(?i)\b(480p|720p|1080p|2160p|4k|2k|web-?dl|webrip|hdrip|bluray)\b', raw_caption)
+    quality_str = ", ".join(list(dict.fromkeys([q.upper() for q in qualities]))) if qualities else "720p, 1080p, WEB-DL"
+
+    audios = re.findall(r'(?i)\b(hindi|english|tamil|telugu|malayalam|kannada|dual|multi)\b', raw_caption)
+    audio_str = ", ".join(list(dict.fromkeys([a.capitalize() for a in audios]))) if audios else "English, Hindi"
+
+    GENRE_MAP = {
+        28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+        99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History",
+        27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance", 878: "Sci-Fi",
+        10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western"
+    }
+
+    genres_str = "Crime, Drama, Mystery, Thriller"
+    runtime_str = "N/A"
+
     if TMDB_API_KEY:
         try:
             encoded_title = search_title.replace(' ', '%20')
@@ -861,22 +878,39 @@ async def add_to_db(client, msg):
 
                         if valid_item:
                             title_display = valid_item.get("title") or valid_item.get("name") or search_title
-                            rel_date = valid_item.get("release_date") or valid_item.get("first_air_date") or "N/A"
-                            rating = valid_item.get("vote_average", "N/A")
+                            vote_avg = valid_item.get("vote_average")
+                            rating = f"{round(vote_avg, 1)}" if vote_avg else "N/A"
                             p_path = valid_item.get("poster_path")
                             poster_url = f"https://image.tmdb.org/t/p/w342{p_path}"
 
+                            g_ids = valid_item.get("genre_ids", [])
+                            if g_ids:
+                                matched = [GENRE_MAP[g] for g in g_ids if g in GENRE_MAP]
+                                if matched:
+                                    genres_str = ", ".join(matched)
+
+                            movie_id = valid_item.get("id")
+                            if movie_id:
+                                d_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}"
+                                async with session.get(d_url) as d_resp:
+                                    if d_resp.status == 200:
+                                        d_data = await d_resp.json()
+                                        rt = d_data.get("runtime")
+                                        if rt:
+                                            runtime_str = f"{rt}m"
+
         except Exception as e:
             logger.error(f"TMDB Fetch Error: {e}")
-            
+
+    # CLEAN SHORT CAPTION FORMAT
     caption_text = (
-        f"🎬 **EXCLUSIVE MOVIE DROP** 🎬\n\n"
-        f"📌 **TITLE :** `{title_display}`\n"
-        f"📅 **RELEASE DATE :** {rel_date}\n"
-        f"⭐ **RATING :** {rating} / 10\n"
-        f"📁 **FILE NAME :** `{raw_caption}`\n\n"
-        f"👇 **DOWNLOAD HERE** 👇\n"
-        f"Movie ka naam copy karke search group me likh dena he."
+        f"✨ **TITLE :** `{title_display}`\n"
+        f"─────────────────────\n"
+        f"🎭 **ɢᴇɴʀᴇs :** {genres_str}\n"
+        f"⏱️ **ʀᴜɴᴛɪᴍᴇ :** {runtime_str}\n"
+        f"🎬 **ǫᴜᴀʟɪᴛʏ :** {quality_str}\n"
+        f"🔉 **ᴀᴜᴅɪᴏ :** {audio_str}\n"
+        f"🌟 **ɪᴍᴅʙ :** {rating}/10"
     )
 
     buttons = InlineKeyboardMarkup([
