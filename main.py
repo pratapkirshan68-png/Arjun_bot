@@ -918,7 +918,7 @@ async def add_to_db(client, msg):
         f"⏱️ **ʀᴜɴᴛɪᴍᴇ :** {runtime_str}\n"
         f"🎬 **ǫᴜᴀʟɪᴛʏ :** {quality_str}\n"
         f"🔉 **ᴀᴜᴅɪᴏ :** {audio_str}\n"
-        f"🌟 **ɪᴍ德ʙ :** {rating}/10"
+        f"🌟 **IMDB :** {rating}/10"
     )
     
     buttons = InlineKeyboardMarkup([
