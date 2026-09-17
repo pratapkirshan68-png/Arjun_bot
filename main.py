@@ -838,7 +838,7 @@ async def add_to_db(client, msg):
         10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western"
     }
 
-    genres_str = "Crime, Drama, Mystery, Thriller"
+    genres_str = "Action, Drama"
     runtime_str = "N/A"
 
     if TMDB_API_KEY:
@@ -872,7 +872,7 @@ async def add_to_db(client, msg):
 
                         valid_item = None
                         for res in results:
-                            if res.get("poster_path"):
+                            if res.get("backdrop_path") or res.get("poster_path"):
                                 valid_item = res
                                 break
 
@@ -880,8 +880,14 @@ async def add_to_db(client, msg):
                             title_display = valid_item.get("title") or valid_item.get("name") or search_title
                             vote_avg = valid_item.get("vote_average")
                             rating = f"{round(vote_avg, 1)}" if vote_avg else "N/A"
+                            
+                            # CHODA / WIDE BANNER (Backdrop Image)
+                            b_path = valid_item.get("backdrop_path")
                             p_path = valid_item.get("poster_path")
-                            poster_url = f"https://image.tmdb.org/t/p/w342{p_path}"
+                            if b_path:
+                                poster_url = f"https://image.tmdb.org/t/p/w780{b_path}"
+                            elif p_path:
+                                poster_url = f"https://image.tmdb.org/t/p/w500{p_path}"
 
                             g_ids = valid_item.get("genre_ids", [])
                             if g_ids:
@@ -897,7 +903,9 @@ async def add_to_db(client, msg):
                                         d_data = await d_resp.json()
                                         rt = d_data.get("runtime")
                                         if rt:
-                                            runtime_str = f"{rt}m"
+                                            hrs = rt // 60
+                                            mins = rt % 60
+                                            runtime_str = f"{hrs}h {mins}m" if hrs else f"{mins}m"
 
         except Exception as e:
             logger.error(f"TMDB Fetch Error: {e}")
@@ -910,9 +918,9 @@ async def add_to_db(client, msg):
         f"⏱️ **ʀᴜɴᴛɪᴍᴇ :** {runtime_str}\n"
         f"🎬 **ǫᴜᴀʟɪᴛʏ :** {quality_str}\n"
         f"🔉 **ᴀᴜᴅɪᴏ :** {audio_str}\n"
-        f"🌟 **ɪᴍᴅʙ :** {rating}/10"
+        f"🌟 **ɪᴍ德ʙ :** {rating}/10"
     )
-
+    
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔍 GET MOVIE HERE 🔍", url=group_link)]
     ])
