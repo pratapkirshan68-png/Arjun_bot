@@ -824,7 +824,7 @@ async def add_to_db(client, msg):
     rating = "N/A"
     title_display = search_title
 
-    # === QUALITY, AUDIO & GENRE PARSING ===
+   # === QUALITY, AUDIO & GENRE PARSING ===
     qualities = re.findall(r'(?i)\b(480p|720p|1080p|2160p|4k|2k|web-?dl|webrip|hdrip|bluray)\b', raw_caption)
     quality_str = ", ".join(list(dict.fromkeys([q.upper() for q in qualities]))) if qualities else "720p, 1080p, WEB-DL"
 
@@ -840,6 +840,7 @@ async def add_to_db(client, msg):
 
     genres_str = "Action, Drama"
     runtime_str = "N/A"
+    release_year = str(year) if 'year' in locals() and year else "N/A"
 
     if TMDB_API_KEY:
         try:
@@ -881,6 +882,11 @@ async def add_to_db(client, msg):
                             vote_avg = valid_item.get("vote_average")
                             rating = f"{round(vote_avg, 1)}" if vote_avg else "N/A"
                             
+                            # Release Year TMDB se Extract karna
+                            rel_date = valid_item.get("release_date") or valid_item.get("first_air_date")
+                            if rel_date and len(rel_date) >= 4:
+                                release_year = rel_date[:4]
+
                             # CHODA / WIDE BANNER (Backdrop Image)
                             b_path = valid_item.get("backdrop_path")
                             p_path = valid_item.get("poster_path")
@@ -910,14 +916,14 @@ async def add_to_db(client, msg):
         except Exception as e:
             logger.error(f"TMDB Fetch Error: {e}")
 
-    # CLEAN SHORT CAPTION FORMAT
+    # YEAR KE SAATH CLEAN CAPTION FORMAT
     caption_text = (
-        f"✨ **TITLE :** `{title_display}`\n"
+        f"✨ **TITLE :** `{title_display}` ({release_year})\n"
         f"─────────────────────\n"
-        f"🎭 **ɢᴇɴʀᴇs :** {genres_str}\n"
-        f"⏱️ **ʀᴜɴᴛɪᴍᴇ :** {runtime_str}\n"
-        f"🎬 **ǫᴜᴀʟɪᴛʏ :** {quality_str}\n"
-        f"🔉 **ᴀᴜᴅɪᴏ :** {audio_str}\n"
+        f"🎭 **GENRES :** {genres_str}\n"
+        f"⏱️ **RUNTIME :** {runtime_str}\n"
+        f"🎬 **QUALITY :** {quality_str}\n"
+        f"🔉 **AUDIO :** {audio_str}\n"
         f"🌟 **IMDB :** {rating}/10"
     )
     
