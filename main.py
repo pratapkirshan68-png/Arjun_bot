@@ -608,7 +608,7 @@ async def start_cmd(client, msg):
                         await client.send_cached_media(
                             chat_id=msg.chat.id,
                             file_id=res["file_id"],
-                            caption=f"🎬 **{res.get('file_name', res.get('title', 'Movie'))}**\n\n❤️ **Join:** @Movies2026Cinema"
+                            caption=f"🎬 **{res.get('original_title', res.get('title', 'Movie'))}**\n\n❤️ Join: @Movies2026Cinema"
                         )
                         await asyncio.sleep(0.5) # Telegram flood block se bachne ke liye
                     except Exception as e:
