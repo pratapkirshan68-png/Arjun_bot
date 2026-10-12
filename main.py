@@ -263,6 +263,10 @@ async def smart_db_search(client, query):
         clean_q = query.strip().lower()
 
     words = clean_q.split()
+    
+    # Query se numbers nikalna (jaise 2, 3 etc.)
+    query_numbers = re.findall(r'\b\d+\b', clean_q)
+
     all_docs = await client.movies.find({}).to_list(length=3000)
     matched = []
     
@@ -271,17 +275,22 @@ async def smart_db_search(client, query):
         if not doc_title:
             continue
         
-        # 1. Direct Substring Match (e.g. 'lenin' in 'lenin 2026')
+        # Agar query mein number hai (jaise Jailer 2) par DB title mein woh number nahi hai, toh skip karo
+        doc_numbers = re.findall(r'\b\d+\b', doc_title)
+        if query_numbers and not any(num in doc_numbers for num in query_numbers):
+            continue
+        
+        # 1. Direct Substring Match
         if clean_q in doc_title:
             matched.append(doc)
             continue
             
-        # 2. Multi-word Match (Agar search me multiple words hon)
+        # 2. Multi-word Match
         if len(words) > 1 and all(w in doc_title for w in words):
             matched.append(doc)
             continue
 
-        # 3. Strict Fuzzy Match (partial_ratio hata kar token_set_ratio 85+ par set kiya hai)
+        # 3. Strict Fuzzy Match
         if len(clean_q) > 3 and fuzz.token_set_ratio(clean_q, doc_title) >= 85:
             matched.append(doc)
 
@@ -289,17 +298,23 @@ async def smart_db_search(client, query):
         corrected_title = await get_tmdb_corrected_title(query)
         clean_corrected = clean_name(corrected_title)
         if clean_corrected and clean_corrected != clean_q:
+            corrected_numbers = re.findall(r'\b\d+\b', clean_corrected)
             for doc in all_docs:
                 doc_title = clean_name(doc.get("title", ""))
                 if not doc_title:
                     continue
+                
+                doc_numbers = re.findall(r'\b\d+\b', doc_title)
+                if corrected_numbers and not any(num in doc_numbers for num in corrected_numbers):
+                    continue
+
                 if clean_corrected in doc_title:
                     matched.append(doc)
                 elif len(clean_corrected) > 3 and fuzz.token_set_ratio(clean_corrected, doc_title) >= 85:
                     matched.append(doc)
 
     return matched
-
+    
 async def get_shortlink(url):
     if not SHORTLINK_ENABLED: return url
     try:
