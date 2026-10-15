@@ -997,10 +997,11 @@ import cloudscraper
 
 HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi"]
 
-# Multiple RSS Feeds for better speed & coverage
+# Working Proxy Links for Render Server Bypass
 RSS_URLS = [
-    "https://torrentgalaxy.to/rss",
-    "https://yts.mx/rss"
+    "https://tgx.rs",
+    "https://yts.mx"  # Agar YTS phir bhi error de, toh iski jagah niche wala link dalein:
+    # "https://yify.ooo"
 ]
 
 SEEN_RSS_LINKS = set()
