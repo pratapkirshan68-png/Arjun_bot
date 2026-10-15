@@ -9,4 +9,5 @@ openai
 google-generativeai
 google-genai
 feedparser
-
+cloudscraper
+feedparser
