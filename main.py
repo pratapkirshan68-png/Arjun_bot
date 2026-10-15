@@ -17,6 +17,7 @@ from urllib.parse import quote, unquote
 from fuzzywuzzy import fuzz
 from pyrogram.types import InputMediaPhoto, InputMediaDocument
 DEFAULT_POSTER = "https://i.postimg.cc/6q8z5GRk/IMG-20260828-193852.jpg"
+import feedparser
 
 # ================= CONFIGURATION =================
 def get_clean_var(key, default=""):
