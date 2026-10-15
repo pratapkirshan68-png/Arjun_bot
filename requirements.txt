@@ -8,4 +8,5 @@ python-Levenshtein
 openai
 google-generativeai
 google-genai
+feedparser
 
