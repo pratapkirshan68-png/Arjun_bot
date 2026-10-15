@@ -1043,6 +1043,8 @@ async def start_bot():
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080))).start()
     await app.start()
+    # Background RSS task ko start karna
+    asyncio.create_task(background_rss_checker(app))
     await idle()
     await app.stop()
 
