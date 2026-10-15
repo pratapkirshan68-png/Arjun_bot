@@ -993,49 +993,69 @@ async def add_to_db(client, msg):
         logger.error(f"Request Notify Loop Error: {e}")
 
 # ==================== RSS AUTO-FETCH BACKGROUND TASK ====================
+import cloudscraper
+
 HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi"]
+
+# Multiple RSS Feeds for better speed & coverage
 RSS_URLS = [
-    "https://torrentgalaxy.to/rss"  # Yahan aap apni pasand ki RSS link daal sakte hain
+    "https://torrentgalaxy.to/rss",
+    "https://yts.mx/rss"
 ]
+
 SEEN_RSS_LINKS = set()
 
+def fetch_feed_data(url):
+    try:
+        # Cloudflare security bypass
+        scraper = cloudscraper.create_scraper(
+            browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
+        )
+        response = scraper.get(url, timeout=15)
+        if response.status_code == 200:
+            return feedparser.parse(response.content)
+    except Exception as e:
+        print(f"Error fetching RSS from {url}: {e}")
+    return None
+
 async def background_rss_checker(client):
-    # Bot ke start hone ke 10 segundos baad task shuru hoga
     await asyncio.sleep(10)
+    print("🚀 RSS Auto-Checker Started Successfully!")
+    
     while True:
         try:
-            async with aiohttp.ClientSession() as session:
-                for rss_url in RSS_URLS:
-                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-                    async with session.get(rss_url, headers=headers, timeout=20) as resp:
-                        if resp.status == 200:
-                            content = await resp.text()
-                            feed = feedparser.parse(content)
-                            for entry in feed.entries:
-                                title = entry.get("title", "")
-                                link = entry.get("link", "")
-                                
-                                if link not in SEEN_RSS_LINKS:
-                                    SEEN_RSS_LINKS.add(link)
-                                    
-                                    # Check if title contains Hindi keywords
-                                    if any(kw in title.lower() for kw in HINDI_KEYWORDS):
-                                        alert_text = (
-                                            f"🍿 **Nayi Hindi File Mili!**\n\n"
-                                            f"📄 **Title:** `{title}`\n"
-                                            f"🔗 **Link:** {link}"
-                                        )
-                                        # ADMIN_IDS par notification bhejna
-                                        for admin_id in ADMIN_IDS:
-                                            try:
-                                                await client.send_message(admin_id, alert_text)
-                                            except Exception:
-                                                pass
+            for rss_url in RSS_URLS:
+                # Async execution using thread to avoid blocking bot
+                feed = await asyncio.to_thread(fetch_feed_data, rss_url)
+                
+                if feed and hasattr(feed, 'entries'):
+                    print(f"📡 Checked {rss_url}: Found {len(feed.entries)} total items.")
+                    
+                    for entry in feed.entries:
+                        title = entry.get("title", "")
+                        link = entry.get("link", "")
+                        
+                        if link not in SEEN_RSS_LINKS:
+                            SEEN_RSS_LINKS.add(link)
+                            
+                            # Check if title contains Hindi keywords
+                            if any(kw in title.lower() for kw in HINDI_KEYWORDS):
+                                alert_text = (
+                                    f"🍿 **Nayi Hindi File Mili!**\n\n"
+                                    f"📄 **Title:** `{title}`\n"
+                                    f"🔗 **Link:** {link}"
+                                )
+                                # Send notification to Admin
+                                for admin_id in ADMIN_IDS:
+                                    try:
+                                        await client.send_message(admin_id, alert_text)
+                                    except Exception as ex:
+                                        print(f"Error sending msg to admin {admin_id}: {ex}")
         except Exception as e:
-            print(f"RSS Background Error: {e}")
+            print(f"RSS Background Loop Error: {e}")
         
-        # Har 10 minute (600 seconds) baad dobara check karega
-        await asyncio.sleep(600)
+        # Har 5 minute (300 seconds) me check karega
+        await asyncio.sleep(300)
 
 # ================= RUNNER =================
 async def start_bot():
