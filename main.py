@@ -990,6 +990,51 @@ async def add_to_db(client, msg):
     except Exception as e:
         logger.error(f"Request Notify Loop Error: {e}")
 
+# ==================== RSS AUTO-FETCH BACKGROUND TASK ====================
+HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi"]
+RSS_URLS = [
+    "https://torrentgalaxy.to/rss"  # Yahan aap apni pasand ki RSS link daal sakte hain
+]
+SEEN_RSS_LINKS = set()
+
+async def background_rss_checker(client):
+    # Bot ke start hone ke 10 segundos baad task shuru hoga
+    await asyncio.sleep(10)
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                for rss_url in RSS_URLS:
+                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                    async with session.get(rss_url, headers=headers, timeout=20) as resp:
+                        if resp.status == 200:
+                            content = await resp.text()
+                            feed = feedparser.parse(content)
+                            for entry in feed.entries:
+                                title = entry.get("title", "")
+                                link = entry.get("link", "")
+                                
+                                if link not in SEEN_RSS_LINKS:
+                                    SEEN_RSS_LINKS.add(link)
+                                    
+                                    # Check if title contains Hindi keywords
+                                    if any(kw in title.lower() for kw in HINDI_KEYWORDS):
+                                        alert_text = (
+                                            f"🍿 **Nayi Hindi File Mili!**\n\n"
+                                            f"📄 **Title:** `{title}`\n"
+                                            f"🔗 **Link:** {link}"
+                                        )
+                                        # ADMIN_IDS par notification bhejna
+                                        for admin_id in ADMIN_IDS:
+                                            try:
+                                                await client.send_message(admin_id, alert_text)
+                                            except Exception:
+                                                pass
+        except Exception as e:
+            print(f"RSS Background Error: {e}")
+        
+        # Har 10 minute (600 seconds) baad dobara check karega
+        await asyncio.sleep(600)
+
 # ================= RUNNER =================
 async def start_bot():
     app_web = web.Application()
