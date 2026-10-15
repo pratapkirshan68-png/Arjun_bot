@@ -1032,11 +1032,7 @@ async def background_rss_checker(client):
                 if feed and hasattr(feed, 'entries'):
                      print(f"📡 Checked {rss_url}: Found {len(feed.entries)} total items.", flush=True)
                     
-                    for entry in feed.entries:
-                        title = entry.get("title", "")
-                        link = entry.get("link", "")
-                        
-                        if link not in SEEN_RSS_LINKS:
+                                            if link not in SEEN_RSS_LINKS:
                             SEEN_RSS_LINKS.add(link)
                             
                             # Check if title contains Hindi keywords
@@ -1051,7 +1047,8 @@ async def background_rss_checker(client):
                                     try:
                                         await client.send_message(admin_id, alert_text)
                                     except Exception as ex:
-                                        print(f"Error sending msg to admin {admin_id}: {ex}")
+                                        pass
+
         except Exception as e:
             print(f"RSS Background Loop Error: {e}")
         
