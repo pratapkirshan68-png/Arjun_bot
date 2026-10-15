@@ -1030,7 +1030,7 @@ async def background_rss_checker(client):
                 feed = await asyncio.to_thread(fetch_feed_data, rss_url)
                 
                 if feed and hasattr(feed, 'entries'):
-                    print(f"📡 Checked {rss_url}: Found {len(feed.entries)} total items.")
+                    • print(f"📡 Checked {rss_url}: Found {len(feed.entries)} total items.", flush=True)
                     
                     for entry in feed.entries:
                         title = entry.get("title", "")
