@@ -999,9 +999,11 @@ import feedparser
 HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi"]
 
 RSS_URLS = [
-    "https://tgx.rs",
-    "https://yts.mx"
+    "https://1337x.to",
+    "https://yts.mx",
+    "https://eztv.re"
 ]
+
 
 SEEN_RSS_LINKS = set()
 
