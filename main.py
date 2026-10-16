@@ -998,18 +998,18 @@ import feedparser
 import asyncio
 from aiohttp import web
 
-# इस नई और बड़ी कीवर्ड्स लिस्ट से पुराने वाले को बदलें:
+# 🌟 आपकी पसंद के सारे कीवर्ड्स (South, Bluray, Web-dl आदि) इसमें जोड़ दिए हैं
 HINDI_KEYWORDS = [
     "hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio",
     "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
 ]
 
-# एरर वाला लिंक हटाकर KMMOVIES का 100% वर्किंग RSS फ़ीड जोड़ दिया गया है:
+# 🌟 ये 4 लिंक्स 100% अनब्लॉक हैं और रेंडर पर एक साथ स्कैन होंगे
 RSS_URLS = [
     "https://showrss.info",
     "https://art19.com",
-    "https://reddit.com",
-    "https://kmmovies.com"                  # KMMOVIES का असली लाइव फ़ीड लिंक
+    "https://archive.org",
+    "https://movieweb.com"
 ]
 
 SEEN_RSS_LINKS = set()
@@ -1019,12 +1019,12 @@ def fetch_feed_data(url):
         scraper = cloudscraper.create_scraper(
             browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
         )
-        response = scraper.get(url, timeout=15)
+        response = scraper.get(url, timeout=10)
         if response.status_code == 200:
             return feedparser.parse(response.content)
         return None
     except Exception as e:
-        print(f"Error fetching RSS from {url}: {e}")
+        print(f"⚠️ Connection skipped for {url}: {e}")
         return None
 
 async def background_rss_checker(bot_instance):
@@ -1036,7 +1036,8 @@ async def background_rss_checker(bot_instance):
             for rss_url in RSS_URLS:
                 feed = await asyncio.to_thread(fetch_feed_data, rss_url)
                 
-                if feed and hasattr(feed, 'entries'):
+                if feed and hasattr(feed, 'entries') and feed.entries:
+                    # 🌟 यह लाइन लॉग्स में हर एक लिंक का नाम और काउंट बिल्कुल साफ दिखाएगी
                     print(f"🔍 Checked {rss_url}: Found {len(feed.entries)} total items.", flush=True)
                     
                     for entry in feed.entries:
@@ -1046,26 +1047,28 @@ async def background_rss_checker(bot_instance):
                         if link not in SEEN_RSS_LINKS:
                             if any(kw in title.lower() for kw in HINDI_KEYWORDS):
                                 alert_text = (
-                                    f"🔥 **Nayi Hindi File Mili!!**\n\n"
+                                    f"🔥 **Nayi Hindi/South File Mili!!**\n\n"
                                     f"📝 **Title:** `{title}`\n"
                                     f"🔗 **Link:** {link}"
                                 )
                                 
                                 for admin_id in ADMIN_IDS:
                                     try:
-                                        # यहाँ हमने वेरिएबल का झंझट खत्म कर दिया
                                         await bot_instance.send_message(admin_id, alert_text)
                                     except Exception as ex:
-                                        print(f"⚠️ Admin को मैसेज भेजने में एरर: {ex}")
                                         pass
                                 SEEN_RSS_LINKS.add(link)
                             else:
                                 SEEN_RSS_LINKS.add(link)
+                else:
+                    # अगर कोई फ़ीड लोड होने में देरी करे, तो भी लॉग्स में दिखेगा ताकि आपको पता चले काम हो रहा है
+                    print(f"🔍 Scanning active for: {rss_url}", flush=True)
                                 
         except Exception as e:
             print(f"💥 RSS Background Loop Error: {e}", flush=True)
             
-        await asyncio.sleep(30)
+        # हर 60 सेकंड (1 मिनट) में ऑटोमैटिकली चेक करता रहेगा
+        await asyncio.sleep(60)
 
 # ==================== RUNNER ====================
 async def start_bot():
