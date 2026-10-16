@@ -995,16 +995,16 @@ async def add_to_db(client, msg):
 # ==================== RSS AUTO-FETCH BACKGROUND TASK ====================
 import cloudscraper
 import feedparser
+import asyncio
 
-HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi"]
+HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio"]
 
 # इन लिंक्स को Render ब्लॉक नहीं कर पाएगा और यहाँ सारी नई मूवीज आती हैं:
 RSS_URLS = [
-    "https://showrss.info",           # यह एक ग्लोबल ओपन टीवी/मूवी फ़ीड है
-    "https://art19.com",         # ओपन पब्लिक मीडिया फ़ीड (टेस्टिंग के लिए)
-    "https://torrentgalaxy.hair"                # TorrentGalaxy का अल्टरनेटिव अनब्लॉक मिरर डोमेन
+    "https://showrss.info",
+    "https://art19.com",
+    "https://torrentgalaxy.hair"
 ]
-
 
 SEEN_RSS_LINKS = set()
 
@@ -1016,9 +1016,10 @@ def fetch_feed_data(url):
         response = scraper.get(url, timeout=15)
         if response.status_code == 200:
             return feedparser.parse(response.content)
+        return None
     except Exception as e:
         print(f"Error fetching RSS from {url}: {e}")
-    return None
+        return None
 
 async def background_rss_checker(client):
     await asyncio.sleep(10)
@@ -1030,13 +1031,13 @@ async def background_rss_checker(client):
                 feed = await asyncio.to_thread(fetch_feed_data, rss_url)
                 
                 if feed and hasattr(feed, 'entries'):
-                    print(f"📡 Checked {rss_url}: Found {len(feed.entries)} total items.", flush=True)
+                    print(f"🔍 Checked {rss_url}: Found {len(feed.entries)} total items.", flush=True)
                     
                     for entry in feed.entries:
                         title = entry.get("title", "")
                         link = entry.get("link", "")
                         
-                                                # अगर लिंक पहले से प्रोसेस नहीं हुई है
+                        # अगर लिंक पहले से प्रोसेस नहीं हुई है
                         if link not in SEEN_RSS_LINKS:
                             
                             # कीवर्ड्स चेक करें (सब लोअरकेस में)
@@ -1059,23 +1060,25 @@ async def background_rss_checker(client):
                             else:
                                 # अगर हिंदी मूवी नहीं है, तो भी इसे देख लिया है ताकि दोबारा लूप न चले
                                 SEEN_RSS_LINKS.add(link)
-
+                                
         except Exception as e:
-            print(f"RSS Background Loop Error: {e}", flush=True)
-        
-        await asyncio.sleep(300)
+            print(f"💥 RSS Background Loop Error: {e}", flush=True)
+            
+        # टेस्टिंग के लिए इसे 30 सेकंड रखा है, सब सही होने पर आप इसे 300 या 600 कर सकते हैं
+        await asyncio.sleep(30)
 
-
-# ================= RUNNER =================
+# ==================== RUNNER ====================
 async def start_bot():
     app_web = web.Application()
     app_web.router.add_get("/", lambda r: web.Response(text="Bot Alive"))
     runner = web.AppRunner(app_web)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080))).start()
-    await app.start()
-    # Background RSS task ko start karna
-    asyncio.create_task(background_rss_checker(app))
+    await client.start()
+    
+    # 🌟 यहाँ हमने 'app' की जगह सही वेरिएबल 'client' पास कर दिया है
+    asyncio.create_task(background_rss_checker(client))
+    
     await idle()
     await app.stop()
 
