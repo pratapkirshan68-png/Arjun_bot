@@ -1004,12 +1004,12 @@ HINDI_KEYWORDS = [
     "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
 ]
 
-# इन 100% अनब्लॉक और चालू RSS फ़ीड्स से बदलें:
+# इन 100% ओपन और कभी ब्लॉक न होने वाले वर्किंग RSS फ़ीड्स से बदलें:
 RSS_URLS = [
     "https://showrss.info",
     "https://art19.com",
-    "https://eztv.re",
-    "https://yts.mx"
+    "https://reddit.com",      # बॉलीवुड और हिंदी मूवीज का लाइव रेडिट फ़ीड
+    "https://reddit.com shouldibinge/.rss"    # ग्लोबल मूवीज/वेब सीरीज का लाइव फ़ीड
 ]
 
 SEEN_RSS_LINKS = set()
