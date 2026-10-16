@@ -1004,12 +1004,12 @@ HINDI_KEYWORDS = [
     "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
 ]
 
-# इन सभी चालू और अनब्लॉक RSS लिंक्स को एक साथ जोड़ दिया गया है:
+# इन 100% अनब्लॉक और चालू RSS फ़ीड्स से बदलें:
 RSS_URLS = [
     "https://showrss.info",
-    "https://torrentgalaxy.hair",
     "https://art19.com",
-    "https://torrentgalaxy.to"
+    "https://eztv.re",
+    "https://yts.mx"
 ]
 
 SEEN_RSS_LINKS = set()
