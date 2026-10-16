@@ -998,12 +998,11 @@ import feedparser
 
 HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi"]
 
-# इन नए और चालू RSS लिंक्स से अपने कोड को अपडेट करें:
+# इन लिंक्स को Render ब्लॉक नहीं कर पाएगा और यहाँ सारी नई मूवीज आती हैं:
 RSS_URLS = [
-    "https://yts.mx",                           # अगर यह काम न करे तो नीचे वाला बैकअप ट्राई करें
-    "https://yify-rss.com",                   # YTS का सबसे बेस्ट अल्टरनेटिव RSS फ़ीड
-    "https://torrentgalaxy.to",                # TorrentGalaxy का चालू डोमेन फ़ीड
-    "https://tgx.rs"                           # TorrentGalaxy का दूसरा वर्किंग फ़ीड
+    "https://showrss.info",           # यह एक ग्लोबल ओपन टीवी/मूवी फ़ीड है
+    "https://art19.com",         # ओपन पब्लिक मीडिया फ़ीड (टेस्टिंग के लिए)
+    "https://torrentgalaxy.hair"                # TorrentGalaxy का अल्टरनेटिव अनब्लॉक मिरर डोमेन
 ]
 
 
