@@ -998,11 +998,12 @@ import feedparser
 
 HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi"]
 
-# इन असली और वर्किंग RSS फ़ीड लिंक्स से बदलें:
+# इन नए और चालू RSS लिंक्स से अपने कोड को अपडेट करें:
 RSS_URLS = [
-    "https://yts.mx/rss",                          # YTS का ऑफिशियल वर्किंग RSS फ़ीड
-    "https://ezrss.ch",                      # EZTV (ezRSS) का मुख्य वर्किंग फ़ीड
-    "https://tgx.rs"                           # TorrentGalaxy का फ़ीड (यहाँ नई हिंदी फ़िल्में बहुत जल्दी आती हैं)
+    "https://yts.mx",                           # अगर यह काम न करे तो नीचे वाला बैकअप ट्राई करें
+    "https://yify-rss.com",                   # YTS का सबसे बेस्ट अल्टरनेटिव RSS फ़ीड
+    "https://torrentgalaxy.to",                # TorrentGalaxy का चालू डोमेन फ़ीड
+    "https://tgx.rs"                           # TorrentGalaxy का दूसरा वर्किंग फ़ीड
 ]
 
 
