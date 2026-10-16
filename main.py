@@ -998,10 +998,11 @@ import feedparser
 
 HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi"]
 
+# इन असली और वर्किंग RSS फ़ीड लिंक्स से बदलें:
 RSS_URLS = [
-    "https://1337x.to",
-    "https://yts.mx",
-    "https://eztv.re"
+    "https://yts.mx/rss",                          # YTS का ऑफिशियल वर्किंग RSS फ़ीड
+    "https://ezrss.ch",                      # EZTV (ezRSS) का मुख्य वर्किंग फ़ीड
+    "https://tgx.rs"                           # TorrentGalaxy का फ़ीड (यहाँ नई हिंदी फ़िल्में बहुत जल्दी आती हैं)
 ]
 
 
@@ -1035,20 +1036,30 @@ async def background_rss_checker(client):
                         title = entry.get("title", "")
                         link = entry.get("link", "")
                         
+                                                # अगर लिंक पहले से प्रोसेस नहीं हुई है
                         if link not in SEEN_RSS_LINKS:
-                            SEEN_RSS_LINKS.add(link)
                             
+                            # कीवर्ड्स चेक करें (सब लोअरकेस में)
                             if any(kw in title.lower() for kw in HINDI_KEYWORDS):
                                 alert_text = (
-                                    f"🍿 **Nayi Hindi File Mili!**\n\n"
-                                    f"📄 **Title:** `{title}`\n"
+                                    f"🔥 **Nayi Hindi File Mili!!**\n\n"
+                                    f"📝 **Title:** `{title}`\n"
                                     f"🔗 **Link:** {link}"
                                 )
+                                
                                 for admin_id in ADMIN_IDS:
                                     try:
                                         await client.send_message(admin_id, alert_text)
                                     except Exception as ex:
+                                        print(f"⚠️ Admin को मैसेज भेजने में एरर: {ex}")
                                         pass
+                                
+                                # मैसेज भेजने के बाद इसे 'देखी हुई' लिस्ट में डालें
+                                SEEN_RSS_LINKS.add(link)
+                            else:
+                                # अगर हिंदी मूवी नहीं है, तो भी इसे देख लिया है ताकि दोबारा लूप न चले
+                                SEEN_RSS_LINKS.add(link)
+
         except Exception as e:
             print(f"RSS Background Loop Error: {e}", flush=True)
         
