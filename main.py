@@ -998,12 +998,18 @@ import feedparser
 import asyncio
 from aiohttp import web
 
-HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio"]
+# इस नई और बड़ी कीवर्ड्स लिस्ट से पुराने वाले को बदलें:
+HINDI_KEYWORDS = [
+    "hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio",
+    "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
+]
 
 # इन लिंक्स को Render ब्लॉक नहीं कर पाएगा और यहाँ सारी नई मूवीज आती हैं:
 RSS_URLS = [
     "https://showrss.info",
     "https://art19.com",
+    "https://torrentgalaxy.hair"
+    "https://showrss.info",
     "https://torrentgalaxy.hair"
 ]
 
