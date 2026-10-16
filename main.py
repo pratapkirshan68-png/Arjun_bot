@@ -1004,12 +1004,12 @@ HINDI_KEYWORDS = [
     "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
 ]
 
-# इन 100% ओपन और कभी ब्लॉक न होने वाले वर्किंग RSS फ़ीड्स से बदलें:
+# एरर वाला लिंक हटाकर KMMOVIES का 100% वर्किंग RSS फ़ीड जोड़ दिया गया है:
 RSS_URLS = [
     "https://showrss.info",
     "https://art19.com",
-    "https://reddit.com",      # बॉलीवुड और हिंदी मूवीज का लाइव रेडिट फ़ीड
-    "https://reddit.com shouldibinge/.rss"    # ग्लोबल मूवीज/वेब सीरीज का लाइव फ़ीड
+    "https://reddit.com",
+    "https://kmmovies.com"                  # KMMOVIES का असली लाइव फ़ीड लिंक
 ]
 
 SEEN_RSS_LINKS = set()
