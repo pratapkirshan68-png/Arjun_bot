@@ -996,6 +996,7 @@ async def add_to_db(client, msg):
 import cloudscraper
 import feedparser
 import asyncio
+from aiohttp import web  # 🌟 यह लाइन मैंने जोड़ दी है ताकि 'web' वाला एरर हमेशा के लिए खत्म हो जाए
 
 HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio"]
 
@@ -1064,7 +1065,7 @@ async def background_rss_checker(client):
         except Exception as e:
             print(f"💥 RSS Background Loop Error: {e}", flush=True)
             
-        # टेस्टिंग के लिए इसे 30 सेकंड रखा है, सब सही होने पर आप इसे 300 या 600 कर सकते हैं
+        # टेस्टिंग के लिए 30 सेकंड का टाइमर
         await asyncio.sleep(30)
 
 # ==================== RUNNER ====================
@@ -1074,13 +1075,14 @@ async def start_bot():
     runner = web.AppRunner(app_web)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080))).start()
+    
     await client.start()
     
-    # 🌟 यहाँ हमने 'app' की जगह सही वेरिएबल 'client' पास कर दिया है
+    # बैकग्राउंड टास्क को सही वेरिएबल के साथ शुरू करें
     asyncio.create_task(background_rss_checker(client))
     
     await idle()
-    await app.stop()
+    await client.stop()  # 🌟 यहाँ भी एरर से बचने के लिए मैंने 'app' को बदलकर 'client' कर दिया है
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_bot())
