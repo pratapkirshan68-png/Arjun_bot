@@ -996,7 +996,7 @@ async def add_to_db(client, msg):
 import cloudscraper
 import feedparser
 import asyncio
-from aiohttp import web  # 🌟 यह लाइन मैंने जोड़ दी है ताकि 'web' वाला एरर हमेशा के लिए खत्म हो जाए
+from aiohttp import web
 
 HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio"]
 
@@ -1022,7 +1022,7 @@ def fetch_feed_data(url):
         print(f"Error fetching RSS from {url}: {e}")
         return None
 
-async def background_rss_checker(client):
+async def background_rss_checker(bot_instance):
     await asyncio.sleep(10)
     print("🚀 RSS Auto-Checker Started Successfully!", flush=True)
     
@@ -1038,10 +1038,7 @@ async def background_rss_checker(client):
                         title = entry.get("title", "")
                         link = entry.get("link", "")
                         
-                        # अगर लिंक पहले से प्रोसेस नहीं हुई है
                         if link not in SEEN_RSS_LINKS:
-                            
-                            # कीवर्ड्स चेक करें (सब लोअरकेस में)
                             if any(kw in title.lower() for kw in HINDI_KEYWORDS):
                                 alert_text = (
                                     f"🔥 **Nayi Hindi File Mili!!**\n\n"
@@ -1051,21 +1048,18 @@ async def background_rss_checker(client):
                                 
                                 for admin_id in ADMIN_IDS:
                                     try:
-                                        await client.send_message(admin_id, alert_text)
+                                        # यहाँ हमने वेरिएबल का झंझट खत्म कर दिया
+                                        await bot_instance.send_message(admin_id, alert_text)
                                     except Exception as ex:
                                         print(f"⚠️ Admin को मैसेज भेजने में एरर: {ex}")
                                         pass
-                                
-                                # मैसेज भेजने के बाद इसे 'देखी हुई' लिस्ट में डालें
                                 SEEN_RSS_LINKS.add(link)
                             else:
-                                # अगर हिंदी मूवी नहीं है, तो भी इसे देख लिया है ताकि दोबारा लूप न चले
                                 SEEN_RSS_LINKS.add(link)
                                 
         except Exception as e:
             print(f"💥 RSS Background Loop Error: {e}", flush=True)
             
-        # टेस्टिंग के लिए 30 सेकंड का टाइमर
         await asyncio.sleep(30)
 
 # ==================== RUNNER ====================
@@ -1076,13 +1070,17 @@ async def start_bot():
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080))).start()
     
-    await client.start()
+    # 🌟 यहाँ हमने एरर को हमेशा के लिए खत्म करने के लिए globals() का इस्तेमाल किया है
+    # यह आपके कोड में से सही बॉट वेरिएबल को अपने आप ढूंढ लेगा
+    target_bot = globals().get('client') or globals().get('app') or globals().get('bot') or globals().get('Client')
     
-    # बैकग्राउंड टास्क को सही वेरिएबल के साथ शुरू करें
-    asyncio.create_task(background_rss_checker(client))
-    
-    await idle()
-    await client.stop()  # 🌟 यहाँ भी एरर से बचने के लिए मैंने 'app' को बदलकर 'client' कर दिया है
+    if target_bot:
+        await target_bot.start()
+        asyncio.create_task(background_rss_checker(target_bot))
+        await idle()
+        await target_bot.stop()
+    else:
+        print("❌ Error: टेलीग्राम बॉट का वेरिएबल (client/app/bot) नहीं मिल पाया!")
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_bot())
