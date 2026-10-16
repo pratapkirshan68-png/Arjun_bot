@@ -1004,13 +1004,12 @@ HINDI_KEYWORDS = [
     "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
 ]
 
-# इन लिंक्स को Render ब्लॉक नहीं कर पाएगा और यहाँ सारी नई मूवीज आती हैं:
+# इन सभी चालू और अनब्लॉक RSS लिंक्स को एक साथ जोड़ दिया गया है:
 RSS_URLS = [
     "https://showrss.info",
+    "https://torrentgalaxy.hair",
     "https://art19.com",
-    "https://torrentgalaxy.hair"
-    "https://showrss.info",
-    "https://torrentgalaxy.hair"
+    "https://torrentgalaxy.to"
 ]
 
 SEEN_RSS_LINKS = set()
