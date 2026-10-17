@@ -969,12 +969,14 @@ async def add_to_db(client, msg):
 # ==================== RSS AUTO-FETCH BACKGROUND TASK ====================
 HINDI_KEYWORDS = [
     "hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio",
-    "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
+    "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264",
+    "bollywood", "hollywood", "south movie", "480p", "720p", "1080p"
 ]
 
-# 🌟 100% Verified Working Links On Render Server
+# Yahan aap apni working RSS links rakh sakte hain
 RSS_URLS = [
-    "https://subsplease.org/rss/?r=1080"
+    "https://subsplease.org/rss/",  # Yeh ab sabhi qualities (480p, 720p, 1080p) fetch karega
+    "https://rss.feedsubscriber.com/rss"
 ]
 
 SEEN_RSS_LINKS_DEQUE = deque(maxlen=2000)
@@ -1021,9 +1023,10 @@ async def background_rss_checker(bot_instance):
                             add_to_seen_links(link)
                             
                             title_lower = title.lower()
+                            # Agar title me hindi, dubbed, dual, south ya koi bhi movie keyword match hoga, toh SMS aayega
                             if any(kw in title_lower for kw in HINDI_KEYWORDS):
                                 alert_text = (
-                                    f"🔥 **Nayi Hindi/South File Mili!!**\n\n"
+                                    f"🔥 **Nayi Movie / File Mili!!**\n\n"
                                     f"📝 **Title:** `{title}`\n"
                                     f"🔗 **Link:** {link}"
                                 )
@@ -1031,8 +1034,9 @@ async def background_rss_checker(bot_instance):
                                 for admin_id in ADMIN_IDS:
                                     try:
                                         await bot_instance.send_message(admin_id, alert_text)
+                                        print(f"✅ Alert Sent to Admin {admin_id}!", flush=True)
                                     except Exception as ex:
-                                        pass
+                                        print(f"❌ Failed to send alert: {ex}", flush=True)
                 else:
                     print(f"🔍 No entries or feed failed for: {rss_url}", flush=True)
                 
@@ -1041,8 +1045,9 @@ async def background_rss_checker(bot_instance):
         except Exception as e:
             print(f"💥 RSS Background Loop Error: {e}", flush=True)
             
+        # Har 10 minute (600 seconds) me check karega taaki data bache aur ban na lage
         await asyncio.sleep(600)
-
+        
 # ==================== RUNNER ====================
 async def start_bot():
     app_web = web.Application()
