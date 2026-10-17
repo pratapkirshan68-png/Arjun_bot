@@ -973,9 +973,9 @@ HINDI_KEYWORDS = [
 ]
 
 RSS_URLS = [
-    "https://showrss.info",
-    "https://art19.com",
-    "https://torrentgalaxy.hair"
+    "https://torrentgalaxy.to/rss",
+    "https://1337x.to/rss",
+    "https://yts.mx/rss"
 ]
 
 SEEN_RSS_LINKS_DEQUE = deque(maxlen=2000)
