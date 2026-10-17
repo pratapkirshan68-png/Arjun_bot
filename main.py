@@ -973,12 +973,14 @@ HINDI_KEYWORDS = [
     "bollywood", "hollywood", "south movie", "480p", "720p", "1080p"
 ]
 
-# टोरेंट वेबसाइट को सीधे खोलने के बजाय हम rss2json API का उपयोग करेंगे
-# यह Render पर कभी ब्लॉक नहीं होगा!
+# टोरेंट साइट्स की डायरेक्ट लिंक्स पूरी तरह ब्लॉक हैं।
+# इसकी जगह Google Feed के ज़रिए 1337x का ताज़ा हिंदी डेटा निकालें। यह रेंडर पर कभी ब्लॉक नहीं होगा!
+
 RSS_URLS = [
-    "https://rss2json.com",
-    "https://rss2json.com"
+    "https://google.com",
+    "https://google.com"
 ]
+
 
 SEEN_RSS_LINKS_DEQUE = deque(maxlen=2000)
 seen_rss_set = set()
