@@ -973,10 +973,11 @@ HINDI_KEYWORDS = [
     "bollywood", "hollywood", "south movie", "480p", "720p", "1080p"
 ]
 
-# यह बिल्कुल सही फॉर्मेट है, इसे कॉपी करके अपने बॉट में डालें
+# टोरेंट वेबसाइट को सीधे खोलने के बजाय हम rss2json API का उपयोग करेंगे
+# यह Render पर कभी ब्लॉक नहीं होगा!
 RSS_URLS = [
-    "https://glotorrents.pw",   # स्पेशल हिंदी मूवीज और डब कैटेगरी
-    "https://torrentgalaxy.to/rss"                  # बॉलीवुड और हिंदी वेब सीरीज की मुख्य RSS
+    "https://rss2json.com",
+    "https://rss2json.com"
 ]
 
 SEEN_RSS_LINKS_DEQUE = deque(maxlen=2000)
