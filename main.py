@@ -972,10 +972,8 @@ HINDI_KEYWORDS = [
     "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
 ]
 
-# 🌟 100% Render-compatible & Unblocked RSS Feeds
+# 🌟 100% Verified Working Links On Render Server
 RSS_URLS = [
-    "https://ezrss.ch/feed/",
-    "https://eztv.re/ezrss/",
     "https://subsplease.org/rss/?r=1080"
 ]
 
