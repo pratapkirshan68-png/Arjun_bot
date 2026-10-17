@@ -6,6 +6,8 @@ import asyncio
 import aiohttp
 import logging
 import base64
+import gc
+from collections import deque
 from datetime import datetime
 from pyrogram import Client, filters, idle
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
@@ -19,7 +21,6 @@ from pyrogram.types import InputMediaPhoto, InputMediaDocument
 DEFAULT_POSTER = "https://i.postimg.cc/6q8z5GRk/IMG-20260828-193852.jpg"
 import feedparser
 import cloudscraper
-import feedparser
 
 # ================= CONFIGURATION =================
 def get_clean_var(key, default=""):
@@ -256,7 +257,6 @@ async def check_upcoming_movie(query):
         return None
     return None
 
-# ================= FIXED STRICT SEARCH LOGIC =================
 async def smart_db_search(client, query):
     if not query or not query.strip():
         return []
@@ -266,8 +266,6 @@ async def smart_db_search(client, query):
         clean_q = query.strip().lower()
 
     words = clean_q.split()
-    
-    # Query se numbers nikalna (jaise 2, 3 etc.)
     query_numbers = re.findall(r'\b\d+\b', clean_q)
 
     all_docs = await client.movies.find({}).to_list(length=3000)
@@ -278,22 +276,18 @@ async def smart_db_search(client, query):
         if not doc_title:
             continue
         
-        # Agar query mein number hai (jaise Jailer 2) par DB title mein woh number nahi hai, toh skip karo
         doc_numbers = re.findall(r'\b\d+\b', doc_title)
         if query_numbers and not any(num in doc_numbers for num in query_numbers):
             continue
         
-        # 1. Direct Substring Match
         if clean_q in doc_title:
             matched.append(doc)
             continue
             
-        # 2. Multi-word Match
         if len(words) > 1 and all(w in doc_title for w in words):
             matched.append(doc)
             continue
 
-        # 3. Strict Fuzzy Match
         if len(clean_q) > 3 and fuzz.token_set_ratio(clean_q, doc_title) >= 85:
             matched.append(doc)
 
@@ -357,8 +351,6 @@ async def delete_after_delay(msgs, delay):
     for m in msgs:
         try: await m.delete()
         except Exception: pass
-
-# ================= ALL ADMIN COMMAND HANDLERS =================
 
 @app.on_message(filters.command(["pratap", "stats"]) & filters.user(ADMIN_IDS))
 async def stats_cmd(client, msg):
@@ -477,7 +469,6 @@ async def broadcast_cmd(client, msg):
     )
     await status.edit(report)
 
-# ================= CALLBACK QUERY HANDLER (PAGINATION) =================
 @app.on_callback_query(filters.regex(r"^page_"))
 async def page_callback(client, cb):
     try:
@@ -534,10 +525,8 @@ async def start_cmd(client, msg):
     if data.startswith("file_"):
         res = await client.movies.find_one({"_id": ObjectId(data.split("_")[1])})
         if res:
-            # Full original title caption me dikhane ke liye
             raw_title = res.get('file_name') or res.get('original_title') or res.get('title', 'Movie')
             
-            # TMDB search ke liye title clean karna (brackets hatayenge par YEAR bacha kar rakhenge)
             clean_text = str(raw_title).replace('.', ' ').replace('_', ' ').replace('(', '').replace(')', '').replace('[', '').replace(']', '')
             
             quality_pattern = r'(?i)\b(s\d+|e\d+|season|episode|360p|480p|720p|1080p|2160p|4k|mkv|mp4|avi|hd|webdl|web-dl|uncut|dual|hindi|bluray|x264|hevc)\b.*'
@@ -552,18 +541,15 @@ async def start_cmd(client, msg):
                 f"<b>JOIN ❤️: @Movies2026Cinema</b>"
             )
 
-            # Poster dhoondna
             poster_url = res.get("poster") or res.get("poster_url")
             if not poster_url and TMDB_API_KEY:
                 poster_url = await get_poster(clean_title)
 
-            # Agar TMDB se poster na mile, toh aapka brand poster set ho jaye
             if not poster_url:
                 poster_url = DEFAULT_POSTER
 
             sent_msgs = []
             
-            # 1. Poster bhejna (Download & Send technique se taaki Telegram fail na ho)
             if poster_url:
                 poster_path = f"poster_{msg.from_user.id}.jpg"
                 try:
@@ -582,7 +568,6 @@ async def start_cmd(client, msg):
                     if os.path.exists(poster_path):
                         os.remove(poster_path)
 
-            # 2. Main Movie File
             try:
                 sf = await client.send_cached_media(
                     chat_id=msg.chat.id, 
@@ -594,7 +579,6 @@ async def start_cmd(client, msg):
             except Exception as e:
                 print(f"File Send Error: {e}")
 
-            # 3. Auto-delete Warning Message (5 minutes)
         warn_msg = await msg.reply_text(
             "⚠️ **DHYAN DEN:** Is file ko turant apne **Saved Messages** ya..."
         )
@@ -604,35 +588,32 @@ async def start_cmd(client, msg):
 
     elif data.startswith("all_"):
         try:
-            # Query nikalna (base64 ya plain text decode karna)
-                raw_query = data.split("all_", 1)[1]
-                try:
-                    import base64
-                    query = base64.urlsafe_b64decode(raw_query.encode('ascii') + b'==').decode('utf-8')
-                except:
-                    query = raw_query.replace("_", " ")
+            raw_query = data.split("all_", 1)[1]
+            try:
+                import base64
+                query = base64.urlsafe_b64decode(raw_query.encode('ascii') + b'==').decode('utf-8')
+            except:
+                query = raw_query.replace("_", " ")
 
-                sw = await msg.reply("⏳ **Saari files bhej raha hoon, thoda wait karein...**")
-                
-                # Database me search karna
-                results = await asyncio.wait_for(smart_db_search(client, query), timeout=5.0)
-                
-                if not results:
-                    return await sw.edit("❌ Mujhe ye movie database me nahi mili.")
-                
-                # Sabhi files ko ek ek karke loop me bhejna
-                for res in results:
-                    try:
-                        await client.send_cached_media(
-                            chat_id=msg.chat.id,
-                            file_id=res["file_id"],
-                            caption=f"🎬 **{res.get('original_title', res.get('title', 'Movie'))}**\n\n❤️ Join: @Movies2026Cinema"
-                        )
-                        await asyncio.sleep(0.5) # Telegram flood block se bachne ke liye
-                    except Exception as e:
-                        pass
-                
-                await sw.delete()
+            sw = await msg.reply("⏳ **Saari files bhej raha hoon, thoda wait karein...**")
+            
+            results = await asyncio.wait_for(smart_db_search(client, query), timeout=5.0)
+            
+            if not results:
+                return await sw.edit("❌ Mujhe ye movie database me nahi mili.")
+            
+            for res in results:
+                try:
+                    await client.send_cached_media(
+                        chat_id=msg.chat.id,
+                        file_id=res["file_id"],
+                        caption=f"🎬 **{res.get('original_title', res.get('title', 'Movie'))}**\n\n❤️ Join: @Movies2026Cinema"
+                    )
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    pass
+            
+            await sw.delete()
             
         except Exception as e:
             print(f"Get All Files Error: {e}")
@@ -784,7 +765,6 @@ async def search_movie(client, msg):
     except Exception as e:
         logger.error(f"Search Final Error: {e}")
 
-# ================= FIXED ADD TO DB HANDLER =================
 @app.on_message(filters.chat(STORAGE_CHANNEL) & (filters.video | filters.document | filters.forwarded))
 async def add_to_db(client, msg):
     file = msg.video or msg.document
@@ -808,7 +788,6 @@ async def add_to_db(client, msg):
     if not search_title:
         search_title = clean_text.strip()
 
-    # 1. MongoDB me file save karna
     await client.movies.insert_one({
         "title": search_title,
         "original_title": raw_caption,
@@ -817,7 +796,6 @@ async def add_to_db(client, msg):
 
     status_msg = await msg.reply_text(f"📁 File DB me Add ho gayi!\nClean Name: `{search_title}`")
 
-    # 2. ATOMIC LOCKING: Duplicate Poster check karna
     poster_track = await client.posted_posters.find_one_and_update(
         {"title": search_title.lower()},
         {"$setOnInsert": {"title": search_title.lower(), "created_at": datetime.now()}},
@@ -842,7 +820,6 @@ async def add_to_db(client, msg):
     rating = "N/A"
     title_display = search_title
 
-   # === QUALITY, AUDIO & GENRE PARSING ===
     qualities = re.findall(r'(?i)\b(480p|720p|1080p|2160p|4k|2k|web-?dl|webrip|hdrip|bluray)\b', raw_caption)
     quality_str = ", ".join(list(dict.fromkeys([q.upper() for q in qualities]))) if qualities else "720p, 1080p, WEB-DL"
 
@@ -900,12 +877,10 @@ async def add_to_db(client, msg):
                             vote_avg = valid_item.get("vote_average")
                             rating = f"{round(vote_avg, 1)}" if vote_avg else "N/A"
                             
-                            # Release Year TMDB se Extract karna
                             rel_date = valid_item.get("release_date") or valid_item.get("first_air_date")
                             if rel_date and len(rel_date) >= 4:
                                 release_year = rel_date[:4]
 
-                            # CHODA / WIDE BANNER (Backdrop Image)
                             b_path = valid_item.get("backdrop_path")
                             p_path = valid_item.get("poster_path")
                             if b_path:
@@ -934,7 +909,6 @@ async def add_to_db(client, msg):
         except Exception as e:
             logger.error(f"TMDB Fetch Error: {e}")
 
-    # YEAR KE SAATH CLEAN CAPTION FORMAT
     caption_text = (
         f"✨ **TITLE :** `{title_display}` ({release_year})\n"
         f"─────────────────────\n"
@@ -993,42 +967,43 @@ async def add_to_db(client, msg):
         logger.error(f"Request Notify Loop Error: {e}")
 
 # ==================== RSS AUTO-FETCH BACKGROUND TASK ====================
-import cloudscraper
-import feedparser
-import asyncio
-from aiohttp import web
-
-# 🌟 आपकी पसंद के सारे कीवर्ड्स (South, Bluray, Web-dl आदि) इसमें जोड़ दिए हैं
 HINDI_KEYWORDS = [
     "hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio",
     "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
 ]
 
-# 🌟 ये 4 लिंक्स 100% अनब्लॉक हैं और रेंडर पर एक साथ स्कैन होंगे
 RSS_URLS = [
     "https://showrss.info",
     "https://art19.com",
-    "https://archive.org",
-    "https://movieweb.com"
+    "https://torrentgalaxy.hair"
 ]
 
-SEEN_RSS_LINKS = set()
+SEEN_RSS_LINKS_DEQUE = deque(maxlen=2000)
+seen_rss_set = set()
+
+def add_to_seen_links(link):
+    if link not in seen_rss_set:
+        if len(seen_rss_set) >= 2000:
+            oldest_link = SEEN_RSS_LINKS_DEQUE.popleft()
+            seen_rss_set.discard(oldest_link)
+        SEEN_RSS_LINKS_DEQUE.append(link)
+        seen_rss_set.add(link)
 
 def fetch_feed_data(url):
     try:
         scraper = cloudscraper.create_scraper(
             browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
         )
-        response = scraper.get(url, timeout=10)
+        response = scraper.get(url, timeout=15)
         if response.status_code == 200:
             return feedparser.parse(response.content)
         return None
     except Exception as e:
-        print(f"⚠️ Connection skipped for {url}: {e}")
+        print(f"Error fetching RSS from {url}: {e}", flush=True)
         return None
 
 async def background_rss_checker(bot_instance):
-    await asyncio.sleep(10)
+    await asyncio.sleep(15)
     print("🚀 RSS Auto-Checker Started Successfully!", flush=True)
     
     while True:
@@ -1037,15 +1012,17 @@ async def background_rss_checker(bot_instance):
                 feed = await asyncio.to_thread(fetch_feed_data, rss_url)
                 
                 if feed and hasattr(feed, 'entries') and feed.entries:
-                    # 🌟 यह लाइन लॉग्स में हर एक लिंक का नाम और काउंट बिल्कुल साफ दिखाएगी
                     print(f"🔍 Checked {rss_url}: Found {len(feed.entries)} total items.", flush=True)
                     
                     for entry in feed.entries:
                         title = entry.get("title", "")
                         link = entry.get("link", "")
                         
-                        if link not in SEEN_RSS_LINKS:
-                            if any(kw in title.lower() for kw in HINDI_KEYWORDS):
+                        if link and link not in seen_rss_set:
+                            add_to_seen_links(link)
+                            
+                            title_lower = title.lower()
+                            if any(kw in title_lower for kw in HINDI_KEYWORDS):
                                 alert_text = (
                                     f"🔥 **Nayi Hindi/South File Mili!!**\n\n"
                                     f"📝 **Title:** `{title}`\n"
@@ -1057,18 +1034,15 @@ async def background_rss_checker(bot_instance):
                                         await bot_instance.send_message(admin_id, alert_text)
                                     except Exception as ex:
                                         pass
-                                SEEN_RSS_LINKS.add(link)
-                            else:
-                                SEEN_RSS_LINKS.add(link)
                 else:
-                    # अगर कोई फ़ीड लोड होने में देरी करे, तो भी लॉग्स में दिखेगा ताकि आपको पता चले काम हो रहा है
-                    print(f"🔍 Scanning active for: {rss_url}", flush=True)
-                                
+                    print(f"🔍 No entries or feed failed for: {rss_url}", flush=True)
+                
+                gc.collect()
+                
         except Exception as e:
             print(f"💥 RSS Background Loop Error: {e}", flush=True)
             
-        # हर 60 सेकंड (1 मिनट) में ऑटोमैटिकली चेक करता रहेगा
-        await asyncio.sleep(60)
+        await asyncio.sleep(600)
 
 # ==================== RUNNER ====================
 async def start_bot():
@@ -1078,8 +1052,6 @@ async def start_bot():
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080))).start()
     
-    # 🌟 यहाँ हमने एरर को हमेशा के लिए खत्म करने के लिए globals() का इस्तेमाल किया है
-    # यह आपके कोड में से सही बॉट वेरिएबल को अपने आप ढूंढ लेगा
     target_bot = globals().get('client') or globals().get('app') or globals().get('bot') or globals().get('Client')
     
     if target_bot:
