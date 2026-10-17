@@ -972,10 +972,11 @@ HINDI_KEYWORDS = [
     "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264"
 ]
 
+# 🌟 100% Render-compatible & Unblocked RSS Feeds
 RSS_URLS = [
-    "https://torrentgalaxy.to/rss",
-    "https://1337x.to/rss",
-    "https://yts.mx/rss"
+    "https://ezrss.ch/feed/",
+    "https://eztv.re/ezrss/",
+    "https://subsplease.org/rss/?r=1080"
 ]
 
 SEEN_RSS_LINKS_DEQUE = deque(maxlen=2000)
