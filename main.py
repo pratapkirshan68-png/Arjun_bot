@@ -973,10 +973,10 @@ HINDI_KEYWORDS = [
     "bollywood", "hollywood", "south movie", "480p", "720p", "1080p"
 ]
 
-# Yahan aap apni working RSS links rakh sakte hain
+# यह बिल्कुल सही फॉर्मेट है, इसे कॉपी करके अपने बॉट में डालें
 RSS_URLS = [
-    "https://subsplease.org/rss/",  # Yeh ab sabhi qualities (480p, 720p, 1080p) fetch karega
-    "https://rss.feedsubscriber.com/rss"
+    "https://glotorrents.pw",   # स्पेशल हिंदी मूवीज और डब कैटेगरी
+    "https://torrentgalaxy.to/rss"                  # बॉलीवुड और हिंदी वेब सीरीज की मुख्य RSS
 ]
 
 SEEN_RSS_LINKS_DEQUE = deque(maxlen=2000)
