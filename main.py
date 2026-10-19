@@ -274,7 +274,7 @@ async def smart_db_search(client, query):
         if not doc_title:
             continue
         
-        # 1. Direct Substring Match
+        # 1. Direct Substring Match (Query inside doc title)
         if clean_q in doc_title:
             matched.append(doc)
             continue
@@ -284,8 +284,14 @@ async def smart_db_search(client, query):
             matched.append(doc)
             continue
 
-        # 3. Flexible Typo/Fuzzy Match (Threshold 70 for jalar/jeler -> jailer)
-        if len(clean_q) > 2 and (fuzz.token_set_ratio(clean_q, doc_title) >= 70 or fuzz.partial_ratio(clean_q, doc_title) >= 75):
+        # 3. Prevent short titles (like 'v') from false matching via partial substrings
+        if len(doc_title) <= 2:
+            if clean_q == doc_title or any(w == doc_title for w in words):
+                matched.append(doc)
+            continue
+
+        # 4. Strict Fuzzy/Token Match for typos (like jalar -> jailer)
+        if len(clean_q) > 2 and fuzz.token_set_ratio(clean_q, doc_title) >= 75:
             matched.append(doc)
 
     if not matched:
@@ -296,9 +302,13 @@ async def smart_db_search(client, query):
                 doc_title = clean_name(doc.get("title", ""))
                 if not doc_title:
                     continue
+                if len(doc_title) <= 2:
+                    if clean_corrected == doc_title:
+                        matched.append(doc)
+                    continue
                 if clean_corrected in doc_title:
                     matched.append(doc)
-                elif len(clean_corrected) > 2 and (fuzz.token_set_ratio(clean_corrected, doc_title) >= 70 or fuzz.partial_ratio(clean_corrected, doc_title) >= 75):
+                elif len(clean_corrected) > 2 and fuzz.token_set_ratio(clean_corrected, doc_title) >= 75:
                     matched.append(doc)
 
     return matched
