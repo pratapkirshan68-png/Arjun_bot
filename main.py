@@ -6,8 +6,6 @@ import asyncio
 import aiohttp
 import logging
 import base64
-import gc
-from collections import deque
 from datetime import datetime
 from pyrogram import Client, filters, idle
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
@@ -18,9 +16,8 @@ from aiohttp import web
 from urllib.parse import quote, unquote
 from fuzzywuzzy import fuzz
 from pyrogram.types import InputMediaPhoto, InputMediaDocument
+
 DEFAULT_POSTER = "https://i.postimg.cc/6q8z5GRk/IMG-20260828-193852.jpg"
-import feedparser
-import cloudscraper
 
 # ================= CONFIGURATION =================
 def get_clean_var(key, default=""):
@@ -90,7 +87,9 @@ class MovieBot(Client):
                 BotCommand("shortlink", "Shortlink enable ya disable karein (Admin)"),
                 BotCommand("del", "Database se movie delete karein (Admin)"),
                 BotCommand("delall", "Database se movies delete karein (Admin)"),
-                BotCommand("broadcast", "Sabhi users ko message bhejein (Admin)")
+                BotCommand("broadcast", "Sabhi users ko message bhejein (Admin)"),
+                BotCommand("ban", "User ko ban karein (Admin)"),
+                BotCommand("unban", "User ko unban karein (Admin)")
             ])
             print("✅ Telegram Menu Commands Configured!")
         except Exception as e:
@@ -257,6 +256,7 @@ async def check_upcoming_movie(query):
         return None
     return None
 
+# ================= FIXED TYPO-TOLERANT SEARCH LOGIC =================
 async def smart_db_search(client, query):
     if not query or not query.strip():
         return []
@@ -266,8 +266,6 @@ async def smart_db_search(client, query):
         clean_q = query.strip().lower()
 
     words = clean_q.split()
-    query_numbers = re.findall(r'\b\d+\b', clean_q)
-
     all_docs = await client.movies.find({}).to_list(length=3000)
     matched = []
     
@@ -276,42 +274,35 @@ async def smart_db_search(client, query):
         if not doc_title:
             continue
         
-        doc_numbers = re.findall(r'\b\d+\b', doc_title)
-        if query_numbers and not any(num in doc_numbers for num in query_numbers):
-            continue
-        
+        # 1. Direct Substring Match
         if clean_q in doc_title:
             matched.append(doc)
             continue
             
+        # 2. Multi-word Match
         if len(words) > 1 and all(w in doc_title for w in words):
             matched.append(doc)
             continue
 
-        if len(clean_q) > 3 and fuzz.token_set_ratio(clean_q, doc_title) >= 85:
+        # 3. Flexible Typo/Fuzzy Match (Threshold 70 for jalar/jeler -> jailer)
+        if len(clean_q) > 2 and (fuzz.token_set_ratio(clean_q, doc_title) >= 70 or fuzz.partial_ratio(clean_q, doc_title) >= 75):
             matched.append(doc)
 
     if not matched:
         corrected_title = await get_tmdb_corrected_title(query)
         clean_corrected = clean_name(corrected_title)
         if clean_corrected and clean_corrected != clean_q:
-            corrected_numbers = re.findall(r'\b\d+\b', clean_corrected)
             for doc in all_docs:
                 doc_title = clean_name(doc.get("title", ""))
                 if not doc_title:
                     continue
-                
-                doc_numbers = re.findall(r'\b\d+\b', doc_title)
-                if corrected_numbers and not any(num in doc_numbers for num in corrected_numbers):
-                    continue
-
                 if clean_corrected in doc_title:
                     matched.append(doc)
-                elif len(clean_corrected) > 3 and fuzz.token_set_ratio(clean_corrected, doc_title) >= 85:
+                elif len(clean_corrected) > 2 and (fuzz.token_set_ratio(clean_corrected, doc_title) >= 70 or fuzz.partial_ratio(clean_corrected, doc_title) >= 75):
                     matched.append(doc)
 
     return matched
-    
+
 async def get_shortlink(url):
     if not SHORTLINK_ENABLED: return url
     try:
@@ -323,7 +314,7 @@ async def get_shortlink(url):
     except Exception: pass
     return url
 
-async def get_search_buttons(query, results, offset=0):
+async def get_search_buttons(query, results, offset=0, user_id=0):
     btn_list = []
     me = await app.get_me()
     for res in results[offset : offset + PAGE_SIZE]:
@@ -336,9 +327,9 @@ async def get_search_buttons(query, results, offset=0):
         
     nav_btns = []
     if offset > 0:
-        nav_btns.append(InlineKeyboardButton("⬅️ Back", callback_data=f"page_{offset - PAGE_SIZE}_{quote(query)}"))
+        nav_btns.append(InlineKeyboardButton("⬅️ Back", callback_data=f"page_{offset - PAGE_SIZE}_{user_id}_{quote(query)}"))
     if offset + PAGE_SIZE < len(results):
-        nav_btns.append(InlineKeyboardButton("Next ➡️", callback_data=f"page_{offset + PAGE_SIZE}_{quote(query)}"))
+        nav_btns.append(InlineKeyboardButton("Next ➡️", callback_data=f"page_{offset + PAGE_SIZE}_{user_id}_{quote(query)}"))
     
     if nav_btns: btn_list.append(nav_btns)
     
@@ -351,6 +342,8 @@ async def delete_after_delay(msgs, delay):
     for m in msgs:
         try: await m.delete()
         except Exception: pass
+
+        # ================= ALL ADMIN COMMAND HANDLERS =================
 
 @app.on_message(filters.command(["pratap", "stats"]) & filters.user(ADMIN_IDS))
 async def stats_cmd(client, msg):
@@ -435,6 +428,28 @@ async def delete_movie_cmd(client, msg):
     })
     await msg.reply(f"🗑️ Deleted: {result.deleted_count} movie(s).")
 
+@app.on_message(filters.command("ban") & filters.user(ADMIN_IDS))
+async def ban_user_cmd(client, msg):
+    if len(msg.command) < 2:
+        return await msg.reply("Usage:\n`/ban user_id`")
+    try:
+        target_id = int(msg.command[1])
+        await client.users.update_one({"user_id": target_id}, {"$set": {"banned": True}}, upsert=True)
+        await msg.reply(f"🚫 User `{target_id}` ko ban kar diya gaya hai.")
+    except Exception as e:
+        await msg.reply(f"❌ Error: {e}")
+
+@app.on_message(filters.command("unban") & filters.user(ADMIN_IDS))
+async def unban_user_cmd(client, msg):
+    if len(msg.command) < 2:
+        return await msg.reply("Usage:\n`/unban user_id`")
+    try:
+        target_id = int(msg.command[1])
+        await client.users.update_one({"user_id": target_id}, {"$set": {"banned": False}}, upsert=True)
+        await msg.reply(f"✅ User `{target_id}` ko unban kar diya gaya hai.")
+    except Exception as e:
+        await msg.reply(f"❌ Error: {e}")
+
 @app.on_message(filters.command(["broadcast", "sms"]) & filters.user(ADMIN_IDS))
 async def broadcast_cmd(client, msg):
     if not msg.reply_to_message:
@@ -469,19 +484,25 @@ async def broadcast_cmd(client, msg):
     )
     await status.edit(report)
 
+# ================= CALLBACK QUERY HANDLER (PAGINATION - USER RESTRICTED) =================
 @app.on_callback_query(filters.regex(r"^page_"))
 async def page_callback(client, cb):
     try:
-        await cb.answer()
         data = cb.data.split("_")
         offset = int(data[1])
-        query = unquote("_".join(data[2:]))
+        target_user_id = int(data[2])
+        query = unquote("_".join(data[3:]))
 
+        # Check if the user clicking is the one who searched
+        if cb.from_user.id != target_user_id:
+            return await cb.answer("❌ Ye search aapne nahi kiya hai! Aap apna khud search karein.", show_alert=True)
+
+        await cb.answer()
         results = await smart_db_search(client, query)
         if not results:
             return await cb.answer("❌ Koi result nahi mila!", show_alert=True)
 
-        reply_markup = await get_search_buttons(query, results, offset=offset)
+        reply_markup = await get_search_buttons(query, results, offset=offset, user_id=target_user_id)
         await cb.message.edit_reply_markup(reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"Page Callback Error: {e}")
@@ -490,6 +511,10 @@ async def page_callback(client, cb):
 
 @app.on_message(filters.command("start") & filters.private)
 async def start_cmd(client, msg):
+    user_doc = await client.users.find_one({"user_id": msg.from_user.id})
+    if user_doc and user_doc.get("banned"):
+        return await msg.reply("❌ Aapko bot se ban kar diya gaya hai.")
+
     await client.users.update_one({"user_id": msg.from_user.id}, {"$set": {"user_id": msg.from_user.id}}, upsert=True)
     data = msg.command[1] if len(msg.command) > 1 else ""
 
@@ -618,9 +643,12 @@ async def start_cmd(client, msg):
         except Exception as e:
             print(f"Get All Files Error: {e}")
             await msg.reply("❌ Kuch error aayi hai files nikalne me.")
-            
 @app.on_message(filters.private & filters.text & ~filters.regex(r"^/"))
 async def pm_text_handler(client, msg):
+    user_doc = await client.users.find_one({"user_id": msg.from_user.id})
+    if user_doc and user_doc.get("banned"):
+        return await msg.reply("❌ Aapko bot se ban kar diya gaya hai.")
+
     group_link = MAIN_CHANNEL_LINK
     if SEARCH_CHAT and SEARCH_CHAT != 0:
         try:
@@ -638,13 +666,22 @@ async def pm_text_handler(client, msg):
 
 @app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.regex(r"^/"))
 async def search_movie(client, msg):
+    user_id = msg.from_user.id if msg.from_user else 0
+    if user_id:
+        user_doc = await client.users.find_one({"user_id": user_id})
+        if user_doc and user_doc.get("banned"):
+            try:
+                await msg.delete()
+            except Exception:
+                pass
+            return
+
     is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
     query = clean_name(msg.text)
     if len(query) < 2: 
         return
 
     user_name = msg.from_user.first_name if msg.from_user else "User"
-    user_id = msg.from_user.id if msg.from_user else 0
     user_mention = f"[{user_name}](tg://user?id={user_id})" if user_id else "User"
 
     sw = await client.send_message(msg.chat.id, "🔍 Searching...")
@@ -734,7 +771,8 @@ async def search_movie(client, msg):
 
     try:
         poster = await get_poster(query)
-        markup = await get_search_buttons(query, results, offset=0)
+        # Passing user_id to ensure only the searcher can use pagination buttons
+        markup = await get_search_buttons(query, results, offset=0, user_id=user_id)
         
         text = (
             f"🎬 **Results for:** 📌 `{msg.text}`\n"
@@ -765,6 +803,7 @@ async def search_movie(client, msg):
     except Exception as e:
         logger.error(f"Search Final Error: {e}")
 
+# ================= ADD TO DB HANDLER =================
 @app.on_message(filters.chat(STORAGE_CHANNEL) & (filters.video | filters.document | filters.forwarded))
 async def add_to_db(client, msg):
     file = msg.video or msg.document
@@ -966,108 +1005,16 @@ async def add_to_db(client, msg):
     except Exception as e:
         logger.error(f"Request Notify Loop Error: {e}")
 
-# ==================== RSS AUTO-FETCH BACKGROUND TASK ====================
-HINDI_KEYWORDS = [
-    "hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio",
-    "south", "dubbing", "bluray", "web-dl", "webrip", "hdrip", "hdtv", "hevc", "x264",
-    "bollywood", "hollywood", "south movie", "480p", "720p", "1080p"
-]
-
-# टोरेंट साइट्स की डायरेक्ट लिंक्स पूरी तरह ब्लॉक हैं।
-# इसकी जगह Google Feed के ज़रिए 1337x का ताज़ा हिंदी डेटा निकालें। यह रेंडर पर कभी ब्लॉक नहीं होगा!
-
-RSS_URLS = [
-    "https://google.com",
-    "https://google.com"
-]
-
-
-SEEN_RSS_LINKS_DEQUE = deque(maxlen=2000)
-seen_rss_set = set()
-
-def add_to_seen_links(link):
-    if link not in seen_rss_set:
-        if len(seen_rss_set) >= 2000:
-            oldest_link = SEEN_RSS_LINKS_DEQUE.popleft()
-            seen_rss_set.discard(oldest_link)
-        SEEN_RSS_LINKS_DEQUE.append(link)
-        seen_rss_set.add(link)
-
-def fetch_feed_data(url):
-    try:
-        scraper = cloudscraper.create_scraper(
-            browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-        )
-        response = scraper.get(url, timeout=15)
-        if response.status_code == 200:
-            return feedparser.parse(response.content)
-        return None
-    except Exception as e:
-        print(f"Error fetching RSS from {url}: {e}", flush=True)
-        return None
-
-async def background_rss_checker(bot_instance):
-    await asyncio.sleep(15)
-    print("🚀 RSS Auto-Checker Started Successfully!", flush=True)
-    
-    while True:
-        try:
-            for rss_url in RSS_URLS:
-                feed = await asyncio.to_thread(fetch_feed_data, rss_url)
-                
-                if feed and hasattr(feed, 'entries') and feed.entries:
-                    print(f"🔍 Checked {rss_url}: Found {len(feed.entries)} total items.", flush=True)
-                    
-                    for entry in feed.entries:
-                        title = entry.get("title", "")
-                        link = entry.get("link", "")
-                        
-                        if link and link not in seen_rss_set:
-                            add_to_seen_links(link)
-                            
-                            title_lower = title.lower()
-                            # Agar title me hindi, dubbed, dual, south ya koi bhi movie keyword match hoga, toh SMS aayega
-                            if any(kw in title_lower for kw in HINDI_KEYWORDS):
-                                alert_text = (
-                                    f"🔥 **Nayi Movie / File Mili!!**\n\n"
-                                    f"📝 **Title:** `{title}`\n"
-                                    f"🔗 **Link:** {link}"
-                                )
-                                
-                                for admin_id in ADMIN_IDS:
-                                    try:
-                                        await bot_instance.send_message(admin_id, alert_text)
-                                        print(f"✅ Alert Sent to Admin {admin_id}!", flush=True)
-                                    except Exception as ex:
-                                        print(f"❌ Failed to send alert: {ex}", flush=True)
-                else:
-                    print(f"🔍 No entries or feed failed for: {rss_url}", flush=True)
-                
-                gc.collect()
-                
-        except Exception as e:
-            print(f"💥 RSS Background Loop Error: {e}", flush=True)
-            
-        # Har 10 minute (600 seconds) me check karega taaki data bache aur ban na lage
-        await asyncio.sleep(600)
-        
-# ==================== RUNNER ====================
+# ================= RUNNER =================
 async def start_bot():
     app_web = web.Application()
     app_web.router.add_get("/", lambda r: web.Response(text="Bot Alive"))
     runner = web.AppRunner(app_web)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080))).start()
-    
-    target_bot = globals().get('client') or globals().get('app') or globals().get('bot') or globals().get('Client')
-    
-    if target_bot:
-        await target_bot.start()
-        asyncio.create_task(background_rss_checker(target_bot))
-        await idle()
-        await target_bot.stop()
-    else:
-        print("❌ Error: टेलीग्राम बॉट का वेरिएबल (client/app/bot) नहीं मिल पाया!")
+    await app.start()
+    await idle()
+    await app.stop()
 
 if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(start_bot())
