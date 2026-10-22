@@ -17,9 +17,6 @@ from urllib.parse import quote, unquote
 from fuzzywuzzy import fuzz
 from pyrogram.types import InputMediaPhoto, InputMediaDocument
 DEFAULT_POSTER = "https://i.postimg.cc/6q8z5GRk/IMG-20260828-193852.jpg"
-import feedparser
-import cloudscraper
-import feedparser
 
 # ================= CONFIGURATION =================
 def get_clean_var(key, default=""):
@@ -1020,76 +1017,6 @@ async def add_to_db(client, msg):
     except Exception as e:
         logger.error(f"Request Notify Loop Error: {e}")
 
-# ==================== RSS AUTO-FETCH BACKGROUND TASK ====================
-import cloudscraper
-import feedparser
-import asyncio
-from aiohttp import web
-
-HINDI_KEYWORDS = ["hindi", "hin", "dual", "multi", "dubbed", "dub", "org hindi", "clean audio"]
-
-# इन लिंक्स को Render ब्लॉक नहीं कर पाएगा और यहाँ सारी नई मूवीज आती हैं:
-RSS_URLS = [
-    "https://showrss.info",
-    "https://art19.com",
-    "https://torrentgalaxy.hair"
-]
-
-SEEN_RSS_LINKS = set()
-
-def fetch_feed_data(url):
-    try:
-        scraper = cloudscraper.create_scraper(
-            browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-        )
-        response = scraper.get(url, timeout=15)
-        if response.status_code == 200:
-            return feedparser.parse(response.content)
-        return None
-    except Exception as e:
-        print(f"Error fetching RSS from {url}: {e}")
-        return None
-
-async def background_rss_checker(bot_instance):
-    await asyncio.sleep(10)
-    print("🚀 RSS Auto-Checker Started Successfully!", flush=True)
-    
-    while True:
-        try:
-            for rss_url in RSS_URLS:
-                feed = await asyncio.to_thread(fetch_feed_data, rss_url)
-                
-                if feed and hasattr(feed, 'entries'):
-                    print(f"🔍 Checked {rss_url}: Found {len(feed.entries)} total items.", flush=True)
-                    
-                    for entry in feed.entries:
-                        title = entry.get("title", "")
-                        link = entry.get("link", "")
-                        
-                        if link not in SEEN_RSS_LINKS:
-                            if any(kw in title.lower() for kw in HINDI_KEYWORDS):
-                                alert_text = (
-                                    f"🔥 **Nayi Hindi File Mili!!**\n\n"
-                                    f"📝 **Title:** `{title}`\n"
-                                    f"🔗 **Link:** {link}"
-                                )
-                                
-                                for admin_id in ADMIN_IDS:
-                                    try:
-                                        # यहाँ हमने वेरिएबल का झंझट खत्म कर दिया
-                                        await bot_instance.send_message(admin_id, alert_text)
-                                    except Exception as ex:
-                                        print(f"⚠️ Admin को मैसेज भेजने में एरर: {ex}")
-                                        pass
-                                SEEN_RSS_LINKS.add(link)
-                            else:
-                                SEEN_RSS_LINKS.add(link)
-                                
-        except Exception as e:
-            print(f"💥 RSS Background Loop Error: {e}", flush=True)
-            
-        await asyncio.sleep(30)
-
 # ==================== RUNNER ====================
 async def start_bot():
     app_web = web.Application()
@@ -1104,7 +1031,6 @@ async def start_bot():
     
     if target_bot:
         await target_bot.start()
-        asyncio.create_task(background_rss_checker(target_bot))
         await idle()
         await target_bot.stop()
     else:
