@@ -357,8 +357,12 @@ def _word_matches(qw, doc_tokens):
             return True
     return False
 
+def _strip_brand(t):
+    """File names ke end me jo uploader ka branding hota hai ('pratap🇮🇳❤️', 'admin 🧑‍💼 pratap🇮🇳❤️') use hatao."""
+    return re.sub(r'(?i)(admin\W*)?pratap\s*[\U0001F1E6-\U0001F1FF]{2}\s*\u2764?\ufe0f?', ' ', str(t or ""))
+
 def _doc_text(doc):
-    txt = clean_name(doc.get("title", "")) + " " + clean_name(doc.get("original_title", ""))
+    txt = clean_name(_strip_brand(doc.get("title", ""))) + " " + clean_name(_strip_brand(doc.get("original_title", "")))
     # File names me jo uploader/admin ka branding hota hai (jaise "admin pratap") use ignore karo
     txt = re.sub(r'\badmin\b(\s+pratap\b)?', ' ', txt)
     return " ".join(txt.split())
