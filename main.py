@@ -136,6 +136,19 @@ def clean_name(text):
     text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
     return " ".join(text.split()).strip()
 
+NOISE_WORDS = {
+    "full", "ful", "movie", "movies", "film", "films", "hd", "hindi", "dubbed", "dubbing", "dabbing",
+    "dub", "dab", "download", "free", "watch", "online", "south", "new", "latest", "link", "please",
+    "pls", "plz", "bhai", "bro", "sir", "de", "do", "dedo", "chahiye", "chaiye", "wali", "wala", "ki",
+    "ka", "ko", "ke", "mein", "me", "sab", "hai", "hain", "in", "the", "and", "with", "audio", "print",
+    "quality", "original", "version", "mujhe", "muje", "bhejo", "send", "a", "to"
+}
+
+def strip_noise(cq):
+    """'ramayana full movie hindi dubbing' -> 'ramayana' (sirf tab jab koi asli naam bacha ho)."""
+    kept = [t for t in cq.split() if t not in NOISE_WORDS]
+    return " ".join(kept) if kept else cq
+
 async def notify_admins_about_request(client, user_name, user_id, user_mention, raw_query):
     alert_text = (
         f"📥 **NEW MOVIE REQUEST RECEIVED!**\n\n"
@@ -244,7 +257,7 @@ async def check_upcoming_movie(query):
     if not TMDB_API_KEY:
         return None
 
-    clean_q = re.sub(r'(?i)\b(hindi|dubbed|english|tamil|telugu|full|movie|720p|1080p|480p|web-dl|hdrip|bluray)\b', '', query).strip()
+    clean_q = strip_noise(clean_name(query))
     if not clean_q:
         clean_q = query
 
@@ -260,6 +273,9 @@ async def check_upcoming_movie(query):
                         return None
 
                     today = datetime.now().date()
+
+                    # Jis result ka naam bilkul query jaisa ho use pehle check karo
+                    results.sort(key=lambda it: 0 if clean_name(it.get("title") or it.get("name") or "") == clean_q else 1)
 
                     for item in results:
                         rel_date_str = item.get("release_date") or item.get("first_air_date")
@@ -342,7 +358,10 @@ def _word_matches(qw, doc_tokens):
     return False
 
 def _doc_text(doc):
-    return (clean_name(doc.get("title", "")) + " " + clean_name(doc.get("original_title", ""))).strip()
+    txt = clean_name(doc.get("title", "")) + " " + clean_name(doc.get("original_title", ""))
+    # File names me jo uploader/admin ka branding hota hai (jaise "admin pratap") use ignore karo
+    txt = re.sub(r'\badmin\b(\s+pratap\b)?', ' ', txt)
+    return " ".join(txt.split())
 
 def _exact_match(clean_q, doc):
     txt = _doc_text(doc)
@@ -384,7 +403,7 @@ async def smart_db_search(client, query):
     if not query or not query.strip():
         return []
 
-    clean_q = clean_name(query)
+    clean_q = strip_noise(clean_name(query))
     if not clean_q:
         clean_q = query.strip().lower()
 
@@ -818,7 +837,7 @@ async def pm_text_handler(client, msg):
 @app.on_message(filters.chat(SEARCH_CHAT) & filters.text & ~filters.regex(r"^/"))
 async def search_movie(client, msg):
     is_admin = msg.from_user and msg.from_user.id in ADMIN_IDS
-    query = clean_name(msg.text)
+    query = strip_noise(clean_name(msg.text))
     if len(query) < 2: 
         return
 
@@ -839,11 +858,55 @@ async def search_movie(client, msg):
         except Exception:
             return d_str
 
+    # Upcoming check DB search ke saath hi shuru ho jata hai
+    up_task = asyncio.create_task(check_upcoming_movie(msg.text))
+
+    async def get_upcoming():
+        try:
+            return await asyncio.wait_for(asyncio.shield(up_task), timeout=5.0)
+        except Exception:
+            return None
+
+    async def send_upcoming_card(upcoming_info):
+        up_date = format_date(upcoming_info.get('release_date', 'N/A'))
+        days_str = upcoming_info.get('days_remaining', 'N/A')
+        status_str = upcoming_info.get('status', 'Upcoming')
+        card = (
+            f"🎬 **Movie:** `{upcoming_info['title']}`\n"
+            f"👤 **Requested by:** {user_mention} (`{user_id}`)\n"
+            f"📅 **Release Date:** `{up_date}`\n"
+            f"📌 **Status:** `{status_str}`\n"
+            f"⏳ **Info / Days Left:** `{days_str}`\n\n"
+            f"ℹ️ _Ye movie release/available hote hi hamare database me add kar di jayegi!_"
+        )
+        res_msg = None
+        if upcoming_info.get('poster'):
+            try:
+                res_msg = await client.send_photo(msg.chat.id, photo=upcoming_info['poster'], caption=card)
+            except Exception:
+                res_msg = await client.send_message(msg.chat.id, text=card)
+        else:
+            res_msg = await client.send_message(msg.chat.id, text=card)
+        if not is_admin and res_msg:
+            asyncio.create_task(delete_after_delay([res_msg], 300))
+        return res_msg
+
     results = []
     try:
         results = await asyncio.wait_for(smart_db_search(client, msg.text), timeout=10.0)
     except Exception:
         results = []
+
+    # Files mil gayi, par agar ye naam asal me upcoming movie ka hai (aur kisi file ka title
+    # bilkul wahi nahi hai, sirf naam kisi file par likha hai) to upcoming card bhi dikhao.
+    if results:
+        up = await get_upcoming()
+        if up and up.get("status") == "Upcoming":
+            if clean_name(up["title"]) == query and not any(clean_name(d.get("title", "")) == query for d in results):
+                try:
+                    await send_upcoming_card(up)
+                except Exception as e:
+                    logger.error(f"Upcoming card error: {e}")
 
     if not results:
         await client.requests.update_one(
@@ -860,11 +923,7 @@ async def search_movie(client, msg):
 
         asyncio.create_task(notify_admins_about_request(client, user_name, user_id, user_mention, msg.text))
 
-        upcoming_info = None
-        try:
-            upcoming_info = await asyncio.wait_for(check_upcoming_movie(msg.text), timeout=4.0)
-        except Exception:
-            upcoming_info = None
+        upcoming_info = await get_upcoming()
 
         if upcoming_info:
             up_date = format_date(upcoming_info.get('release_date', 'N/A'))
